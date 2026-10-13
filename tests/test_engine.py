@@ -99,3 +99,29 @@ def test_nonfinite_rows_never_commit(runtime):
         compact(runtime)
     with sqlite3.connect(runtime.store.path) as db:
         assert db.execute("SELECT count(*) FROM memories").fetchone()[0] == 0
+
+
+def test_fold_reencodes_child_memory_and_preserves_owner_isolation(runtime):
+    parent = compact(runtime)
+    child = runtime.compact(owner='session-a', prefix_ids=[7, 8], history_ids=[30, 31],
+                            summary_ids=[90])
+    old_child = child.embeddings.copy()
+    folded = runtime.compact(owner='session-a', prefix_ids=[1, 3], history_ids=[80],
+        summary_ids=[60], previous=parent.handle, branches=[child.handle])
+    assert folded.receipt['branches'] == [child.handle]
+    assert folded.receipt['source_memory_slots'] == len(parent.embeddings) + len(child.embeddings)
+    np.testing.assert_array_equal(runtime.store.get('session-a', child.handle).embeddings, old_child)
+    runtime.generate(owner='session-a', handle=folded.handle, continuation_ids=[88], max_new_tokens=4)
+    with pytest.raises(KeyError):
+        runtime.compact(owner='session-b', prefix_ids=[1], history_ids=[2], summary_ids=[3],
+                        branches=[child.handle])
+    with pytest.raises(ValueError, match='twice'):
+        runtime.compact(owner='session-a', prefix_ids=[1, 3], history_ids=[80], summary_ids=[60],
+                        previous=parent.handle, branches=[child.handle, child.handle])
+
+
+def test_compact_rejects_unrestorable_summary_before_encoding(runtime):
+    runtime.backend.context_limit = 32
+    with pytest.raises(ValueError, match='not truncated'):
+        runtime.compact(owner='session-a', prefix_ids=[1, 3], history_ids=[20], summary_ids=[50] * 24)
+    assert not runtime.backend.calls

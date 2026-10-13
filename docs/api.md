@@ -13,6 +13,8 @@ X-Remory-Session: <session-id>
 The session ID groups stored memories across requests. `GET /health` checks the
 service, `/get_server_info` shows the SGLang configuration, and `/openapi.json`
 describes the routes.
+`GET /v1/remory/info` returns the actor and checkpoint identity, tokenizer and
+summary configuration, and the context capacity used by `r-codex`.
 
 ## Generate
 
@@ -69,18 +71,10 @@ pairs together. Retained messages go into the next generation's continuation.
 
 `Harness.compact` generates the summary through `/generate` before calling this
 route. A harness with its own summary method can supply `summary_ids` directly.
-The Qwen checkpoint uses a JSON summary with five array fields. The GLM example
-uses a plain-text checkpoint after extracting its completed answer.
-
-```json
-{
-  "current_progress": [],
-  "key_decisions": [],
-  "important_context_constraints_preferences": [],
-  "next_steps": [],
-  "critical_data_examples_references": []
-}
-```
+Use the summary contract supplied by the checkpoint. The released Qwen encoder
+uses a JSON summary matching `summary_contract.output_schema`; the provider
+applies it during generation. The GLM example extracts a completed plain-text
+answer before encoding memory.
 
 Response:
 
@@ -97,6 +91,12 @@ summary and memory with that history, conditioned on the new summary. GLM keeps
 the previous memory frontier, encodes the new history, and merges nodes when
 needed. Each compaction creates a new immutable handle, so branches can keep
 different checkpoints.
+
+Qwen also accepts `branches: ["rm_…"]` to fold completed sub-agent memories into
+the new checkpoint. Branches must belong to the same session and model. Their
+summaries and soft tokens are re-encoded with the parent's history; the original
+handles remain valid. The Codex provider tracks completed children and folds
+each checkpoint once.
 
 Internally, Qwen encoding posts to the same SGLang `/generate`
 endpoint with `max_new_tokens: 0`, a Remory operation in

@@ -18,6 +18,7 @@ class CompactRequest(Request):
     history_ids: list[StrictInt]
     summary_ids: list[StrictInt]
     previous: str | None = None
+    branches: list[str] = Field(default_factory=list, max_length=16)
 
 
 class MemoryReference(Request):
@@ -31,7 +32,7 @@ class NativeGenerateRequest(Request):
 
 
 def create_app(engine: Remory) -> FastAPI:
-    app = FastAPI(title="Remory", version="0.2.0")
+    app = FastAPI(title="Remory", version="0.3.0")
 
     def session(x_remory_session: Annotated[str | None, Header()] = None):
         try:
@@ -55,9 +56,21 @@ def create_app(engine: Remory) -> FastAPI:
     def health():
         return {"status": "ok", "schema": "remory.v1"}
 
+    @app.get("/v1/remory/info")
+    def info():
+        config = getattr(engine, "model_config", None)
+        if config is None:
+            raise HTTPException(503, "model metadata is unavailable")
+        return {"schema": "remory.server.v1", "config": config,
+                "identity": engine.contract.identity,
+                "context_limit": engine.backend.context_limit}
+
     @app.post("/v1/compact")
     def compact(request: CompactRequest, owner: str = Depends(session)):
-        memory = call(engine.compact, owner=owner, **request.model_dump())
+        args = request.model_dump()
+        if not args["branches"]:
+            args.pop("branches")
+        memory = call(engine.compact, owner=owner, **args)
         return {"handle": memory.handle, "summary_ids": list(memory.summary_ids),
                 "receipt": memory.receipt}
 

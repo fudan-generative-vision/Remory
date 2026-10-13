@@ -70,7 +70,7 @@ def extend_app(http_server, engine):
 
     memory_app = create_app(engine)
     app.router.routes.extend(r for r in memory_app.routes if getattr(r, "path", "") in {
-        "/v1/compact", "/v1/memories/{handle}"})
+        "/v1/compact", "/v1/memories/{handle}", "/v1/remory/info"})
     app.openapi_schema = None
 
 
@@ -114,6 +114,7 @@ def launch(args):
     else:
         backend = SGLangHTTPBackend(f"http://{host}:{args.port}", config, actor, context_limit=limit)
         engine = Remory(backend, MemoryStore(args.store))
+    engine.model_config = config
     extend_app(http_server, engine)
     server_args = ServerArgs(**engine_settings(settings), host=args.host, port=args.port)
     print(f"[Remory] Starting SGLang at http://{host}:{args.port}; context window: {limit:,} tokens.", flush=True)

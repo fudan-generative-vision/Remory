@@ -42,6 +42,21 @@ source /path/to/remory-runtime/venv/bin/activate
 `--cuda` accepts `auto` (the default) and `cu130`. If an update changes
 the pinned runtime recipe, install it in a new runtime directory.
 
+### Upgrade
+
+For this release, update the clone and install the new CLI in a fresh runtime:
+
+```bash
+git pull --ff-only
+python deploy/install.py --runtime-dir .remory-v0.3
+source .remory-v0.3/venv/bin/activate
+python -m remory.launch_server --tp 2
+```
+
+Activate the same environment in the client terminal before running `r-codex`.
+Start a new session after changing memory weights; keep the old runtime and
+database if you need to return to sessions created with the previous checkpoint.
+
 ## Launch
 
 ```bash
@@ -56,9 +71,8 @@ CUDA_VISIBLE_DEVICES=0,1 python -m remory.launch_server \
 The published model ID resolves to the actor revision recorded in the checkpoint.
 Both model arguments can be omitted to use the released Qwen defaults.
 The memory checkpoint is pinned in [`models/load.py`](../src/remory/models/load.py).
-After updating an existing clone with `git pull --ff-only`, restart the server
-and start a new agent session. Saved residual memory belongs to the checkpoint
-that created it.
+Use the [upgrade steps](#upgrade) for an existing installation. Saved residual
+memory belongs to the checkpoint that created it.
 
 ### GLM-5.3-Flash
 

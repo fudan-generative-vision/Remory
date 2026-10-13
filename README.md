@@ -58,10 +58,23 @@ CUDA_VISIBLE_DEVICES=0,1 python -m remory.launch_server \
 The context window defaults to the model maximum (256K for Qwen3.8-27B).
 The first run downloads weights and compiles GPU kernels.
 
-For an existing clone, run `git pull --ff-only` and restart the server to use
-the updated checkpoint. The launcher downloads the pinned release automatically.
+For an existing clone, follow the [upgrade instructions](docs/deployment.md#upgrade).
+The launcher downloads the pinned checkpoint automatically.
 
-### 3. Generate and compact
+### 3. Open Codex
+
+In another terminal:
+
+```bash
+source .remory/venv/bin/activate
+r-codex -C /path/to/project
+```
+
+This opens the native Codex UI with Remory compaction. Use `/compact` during a
+session and `r-codex resume --last` to return later. Codex is installed on first
+use. See [Codex](integrations/codex) for sessions, sub-agents, and MCP tools.
+
+### Generate and compact through the API
 
 ```bash
 curl http://127.0.0.1:8421/generate \
@@ -111,8 +124,8 @@ summary, use `on_compact(..., summary=summary)` to add residual memory.
 
 Save the checkpoint with the conversation. For the next compaction, pass it as
 `previous` and supply the newly removed history. Memory is stored in
-`.remory/memory.sqlite`. The [Codex example](integrations/codex) shows where to
-override a Responses provider's compact handler and resume generation.
+`.remory/memory.sqlite`. The [Codex integration](integrations/codex) provides a
+complete Responses provider and an interactive launcher.
 See the [API reference](docs/api.md) for native SGLang requests with memory.
 
 ## Results
@@ -149,4 +162,4 @@ and [Transformers](https://github.com/huggingface/transformers).
 }
 ```
 
-[Development](docs/development.md) · [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+[Development](docs/development.md) · [MIT License](LICENSE) · [Third-party notices](NOTICES.md)

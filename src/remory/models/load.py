@@ -10,7 +10,7 @@ from .compressor import SummaryResidualCompressor
 from .layers import build_qwen36_27b_dflash_config
 
 WEIGHTS = "mocoV3/Qwen3.8-27B-REMORY-1.9B"
-REVISION = "aafd984cbecff137273c33cbee7d4fc2395f688b"
+REVISION = "f24de2ac3996da36678cd5d196a7dc0dbbc3aa34"
 GLM_WEIGHTS = "mocoV3/GLM-5.3-Flash-REMORY-1.24B"
 GLM_REVISION = "532390e5b72f5eddf7edec60afa26138aff009ef"
 
@@ -76,16 +76,30 @@ def load_compressor(checkpoint: str = WEIGHTS, *, revision=None, device="cpu", d
             owner = model.get_submodule(parent) if parent else model
             owner._buffers[leaf] = value.to(device=device)
         return model, config
+    dflash2 = c.get("architecture") == "DFlash2SummaryResidualCompressor"
+    layers = [5, 19, 33, 47, 61] if dflash2 else [1, 16, 31, 46, 61]
     expected = {"target_hidden_size": 5120, "hidden_size": 5120, "compression_ratio": 16,
-                "num_hidden_layers": 5, "target_layer_ids": [1, 16, 31, 46, 61],
+                "num_hidden_layers": 5, "target_layer_ids": layers,
                 "intermediate_size": 17408, "num_attention_heads": 32,
                 "num_key_value_heads": 8, "head_dim": 128,
                 "layer_types": ["sliding_attention"] * 4 + ["full_attention"]}
     if any(c.get(k) != v for k, v in expected.items()):
         raise ValueError("unsupported checkpoint architecture")
+    model_class = SummaryResidualCompressor
+    architecture = build_qwen36_27b_dflash_config()
+    if dflash2:
+        from .dflash2 import DFlash2SummaryResidualCompressor
+        model_class = DFlash2SummaryResidualCompressor
+        convolution = c.get("dflash2", {})
+        if any(convolution.get(k) != v for k, v in {
+            "block_size": 8, "conv_group_size": 16, "conv_kernel_size": 2,
+            "target_layer_ids": layers, "mask_token_id": 248070,
+        }.items()):
+            raise ValueError("unsupported DFlash2 convolution configuration")
+        architecture.dflash_config = dict(convolution)
     with torch.device("meta"):
-        model = SummaryResidualCompressor(
-            build_qwen36_27b_dflash_config(), target_hidden_size=5120,
+        model = model_class(
+            architecture, target_hidden_size=5120,
             target_layer_ids=c["target_layer_ids"], compression_ratio=16,
             local_window=c["local_window"], output_embedding_rms=c["output_embedding_rms"],
             gradient_checkpointing=False, max_depth=c["max_depth"],

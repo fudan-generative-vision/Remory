@@ -3,13 +3,16 @@
 `src/remory/models/layers.py`, `src/remory/models/compressor.py`, and
 `src/remory/pyramid.py` are inference-focused adaptations of the Recursive Memory
 implementation (MIT, copyright 2026 Recursive Memory contributors). The loader
-targets the public Qwen 1.9B and GLM 1.24B memory releases. Training-loss code, target
+supports the public Qwen and GLM memory releases. Training-loss code, target
 training wrappers, training launchers, and evaluation harnesses were excluded.
 
 The compressor architecture incorporates work from
 [SpecForge](https://github.com/sgl-project/SpecForge) (MIT; upstream provenance
 commit `204299a02fa31e56b5d425661107ae6cf247e4c6`) and DFlash (MIT).
-Their notices are retained in `LICENSES/SpecForge-MIT.txt` and
+`src/remory/models/grouped_conv.py` derives from SpecForge's DFlash2 grouped
+convolution at commit `ed64d275bac8a48e126adb2827368603566a3029`;
+`src/remory/models/dflash2.py` contains the corresponding residual inference
+adaptation. Their notices are retained in `LICENSES/SpecForge-MIT.txt` and
 `LICENSES/DFlash-MIT.txt`. The GLM hook and frontier handling are inference-only
 adaptations of the same local implementation. The package imports PyTorch and
 Transformers. Three GLM processor components from Transformers 5.17.0 are retained
@@ -23,8 +26,11 @@ included in `LICENSES/SGLang-Apache-2.0.txt`. CUDA components are downloaded fro
 NVIDIA with checksum verification and retain their bundled license files. Model
 weight licenses are separate from this code license.
 
-Codex is an independent upstream project. The integration example does not imply
-upstream endorsement or full client certification.
+Codex is an independent upstream project, licensed under Apache-2.0. The
+launcher downloads its unmodified upstream binary and reads its bundled model
+instructions at runtime. Codex is not redistributed in this repository. The
+integration does not imply upstream endorsement. The provider and launcher
+adapt the local Recursive Memory inference harness (MIT).
 
 The demo soundtrack, [Electric Dreams](https://www.scottbuckley.com.au/library/electric-dreams/)
 by Scott Buckley, is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

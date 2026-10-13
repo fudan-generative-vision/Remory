@@ -22,9 +22,12 @@ class Client:
         response.raise_for_status()
         return response.json()
 
-    def compact(self, *, prefix_ids, history_ids, summary_ids, previous=None):
-        return self._post("v1/compact", dict(prefix_ids=list(prefix_ids), history_ids=list(history_ids),
-                                           summary_ids=list(summary_ids), previous=previous))
+    def compact(self, *, prefix_ids, history_ids, summary_ids, previous=None, branches=()):
+        body = dict(prefix_ids=list(prefix_ids), history_ids=list(history_ids),
+                    summary_ids=list(summary_ids), previous=previous)
+        if branches:
+            body["branches"] = list(branches)
+        return self._post("v1/compact", body)
 
     def generate(self, *, max_new_tokens=1024, handle=None, input_ids=None,
                  continuation_ids=(), sampling=None):

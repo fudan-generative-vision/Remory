@@ -46,7 +46,7 @@ class Remory:
         return Prepared(ids, positions, m.embeddings, m.slot_depths)
 
     def compact(self, *, owner: str, prefix_ids, history_ids, summary_ids,
-                previous: str | None = None) -> Memory:
+                previous: str | None = None, branches=()) -> Memory:
         """Commit a new immutable checkpoint after all encode stages succeed.
 
         Initially history_ids is the removed raw span. With previous set, it is
@@ -57,7 +57,7 @@ class Remory:
         """
         self.store._key(owner)
         prefix = token_ids(prefix_ids, "prefix_ids")
-        history = token_ids(history_ids, "history_ids", empty=previous is not None)
+        history = token_ids(history_ids, "history_ids", empty=previous is not None or bool(branches))
         summary_ids = token_ids(summary_ids, "summary_ids")
         c = self.contract
         if previous:
@@ -68,6 +68,21 @@ class Remory:
             source = self._prepare(owner=owner, handle=previous, continuation_ids=history)
         else:
             source = Prepared(prefix + history)
+        if not isinstance(branches, (list, tuple)) or len(branches) > 16:
+            raise ValueError("branches must contain at most 16 memory handles")
+        if len(set(branches)) != len(branches) or previous in branches:
+            raise ValueError("branch memory must not be included twice")
+        # Child checkpoints remain immutable. Only owner-bound memories from the
+        # same actor/encoder may join the parent's next residual frontier.
+        for handle in branches:
+            child = self.store.get(owner, handle)
+            self._check_memory(child)
+            lead = source.input_ids + c.summary_before + child.summary_ids + c.summary_after + c.memory_before
+            positions = tuple(range(len(lead), len(lead) + len(child.embeddings)))
+            memory = (np.concatenate([source.memory, child.embeddings])
+                      if source.memory is not None else child.embeddings)
+            source = Prepared(lead + (c.placeholder_id,) * len(positions) + c.memory_after,
+                source.memory_positions + positions, memory, source.slot_depths + child.slot_depths)
         summary_start = len(prefix) + len(c.summary_before)
         summary_source = Prepared(prefix + c.summary_before + summary_ids + c.summary_after)
         self._check_length(max(len(source.input_ids), len(summary_source.input_ids),
@@ -79,14 +94,17 @@ class Remory:
             depths[index] = max(depths[index], depth)
         plan = plan_pyramid(source_tokens, budget=c.memory_budget, block=c.block_tokens,
                             ratio=c.ratio, max_depth=None, leaf_input_depths=depths)
+        self._check_length(len(prefix) + len(c.summary_before) + len(summary_ids)
+                           + len(c.summary_after) + len(c.memory_before)
+                           + plan.soft_tokens + len(c.memory_after))
         summary = self._matrix(self.backend.encode(
             summary_source, start=summary_start, end=summary_start + len(summary_ids),
             operation="summary"), len(summary_ids))
         leaves = [n for n in plan.nodes if not n.children]
         leaf_rows = self._matrix(self.backend.encode(
             source, start=len(prefix), end=len(source.input_ids),
-            operation="recursive_leaves" if previous else "leaves", summary=summary,
-            block_depths=tuple(min(d, c.max_depth - 1) for d in depths) if previous else ()),
+            operation="recursive_leaves" if source.memory_positions else "leaves", summary=summary,
+            block_depths=tuple(min(d, c.max_depth - 1) for d in depths) if source.memory_positions else ()),
             len(leaves) * plan.slots_per_node)
         outputs = {n.index: leaf_rows[i * plan.slots_per_node:(i + 1) * plan.slots_per_node]
                    for i, n in enumerate(leaves)}
@@ -106,6 +124,7 @@ class Remory:
                        summary_tokens=len(summary_ids), soft_tokens=plan.soft_tokens,
                        prefix_sha256=digest(prefix), summary_sha256=digest(summary_ids),
                        history_sha256=digest(source.input_ids), previous=previous,
+                       branches=list(branches),
                        source_memory_slots=len(source.memory_positions),
                        block_input_depths=depths, logical_max_depth=plan.max_depth,
                        embedding_depth_saturated=any(n.depth > c.max_depth for n in plan.nodes),

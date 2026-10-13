@@ -45,24 +45,22 @@ recursion, and storage; the backend supplies encoding and embedding-aware genera
 
 ## Tested setup
 
-On 2026-10-09, the shared SGLang revision passed 42 Python tests and four
-JavaScript tests, using Python 3.12, PyTorch 2.13.0, Transformers 5.12.1, CUDA 13.0,
-and Node 22. All eight patched SGLang files passed checksum verification. The
-installer's dependency resolution passed; a fresh environment installation has
-not been rerun for this revision.
+On 2026-10-13, a fresh installation of the shared SGLang runtime passed 51 Python
+tests and dependency checks, using Python 3.12, PyTorch 2.13.0, Transformers
+5.12.1, and CUDA 13.0. Four JavaScript tests also passed with Node 22. The installer
+verified all eight patched SGLang files and the CUDA component checksums.
 
-The Qwen actor and memory release available on 2026-10-09 passed the native
-launcher and Python quickstart on two L20D GPUs, with the default 256K context
-configuration. Live checks covered summary generation, a 53-token partial block returning all 64
-soft tokens, two successive compactions, continuation through a new client,
-native SSE, and the JavaScript Codex example. Inputs were short; this was not a
-full-context evaluation. The 2 × 80 GB budget has not been measured on 80 GB cards.
+The released Qwen encoder's 117 tensors match the source weights exactly. The
+Hugging Face loader and this runtime produce bitwise-identical CPU outputs to
+the source for short, padded, and recursive-depth inputs.
 
-The updated Qwen checkpoint was checked on CPU on 2026-10-10. All 97 tensors
-match the source weights exactly. Both the Hugging Face loader and this runtime
-produce bitwise-identical encoder outputs to the source, including a partial
-block and recursive depth inputs. The quickstart accepts its plain-text summary
-contract. The full actor has not been rerun for this checkpoint update.
+The new Qwen release also passed a live native Codex 0.149.0 session through the
+public launcher: shell execution, `apply_patch`, `/compact`, exit and resume with
+the same residual handle, and `view_image`. The model recalled the file contents
+after compaction and identified the test image. This smoke test used one L20D
+GPU with a 32K context setting and short inputs. It does not measure full-context
+behavior or the 2 × 80 GB deployment budget. Sub-agent folding and deduplication
+are covered by the engine and provider tests.
 
 The released 1.24B GLM encoder produced bitwise-identical CUDA outputs to the
 local evaluation encoder for 37-token and 1,024-token source blocks. Eight
