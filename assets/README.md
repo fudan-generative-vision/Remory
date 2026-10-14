@@ -11,8 +11,9 @@ Source: [Remory preprint](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B/
 
 ## Demo
 
-The 57-second video uses the paper's method diagram and recorded Qwen and GLM
-task traces. It moves from a paired Core War replay to nine tasks in a 3×3 grid,
+The 96-second video opens with a rotating anatomical brain illustration, then
+uses the paper's method diagram and recorded Qwen and GLM task traces. It moves
+from a paired Core War replay to nine tasks in a 3×3 grid,
 covering coding and web research. Each task shows both runs side by side, with
 matching context-chart axes and separate request, repeat, error, and compaction
 counts. Repeated outputs are marked yellow and tool errors red.
@@ -33,7 +34,30 @@ presentation.
 The singer-search panel shows a recorded 30-frame contact sheet used to inspect
 candidate footage. That footage does not depict the singer ultimately identified.
 
+The research segment, titled **Fully Automatic Research**, shows
+**Qwen3.8-27B + REMORY-1.9B** exploring flow-matching drafters with DFlash as a
+reference. It replays a 34-hour session through literature searches, code edits,
+experiments, audits, and revisions to a 14-page working paper. A step rail follows
+the recorded work, and branching panels replay eight actual `spawn_agent` calls:
+seven returned reports and one child was stopped while running. Each branching
+panel labels its own condensed event span.
+
+The workflow includes a human-defined goal, assisted setup, and occasional
+feedback. The snapshot is from October 13, 2026, at 15:38 UTC; research is ongoing,
+the paper is a draft, and evaluation and correctness checks remain open. Session
+time includes waiting and service restarts, rather than continuous inference.
+
 Music: [Electric Dreams](https://www.scottbuckley.com.au/library/electric-dreams/)
 by [Scott Buckley](https://www.scottbuckley.com.au), released under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-The excerpt is trimmed to 57.4 seconds, faded in and out, and level-adjusted.
+The excerpt is trimmed to 95.67 seconds, faded in and out, and level-adjusted.
+
+Brain illustration and animation: adapted from the
+[Harvard–Oxford atlas distributed by FSL](https://fsl.fmrib.ox.ac.uk/fsl/docs/other/datasets.html).
+Credit: David Kennedy, Christian Haselgrove, Bruce Fischl, Janis Breeze,
+Jean Frazier, Larry Seidman, and Jill Goldstein. The adapted brain mesh and
+animation are released under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+Changes include a left-hemisphere cortical mesh, transparent cortex, TokyoNight
+colors, 3D camera rotation, and motion-graphics composition. This is an anatomical
+illustration, not an activation map.
