@@ -18,7 +18,7 @@ https://github.com/user-attachments/assets/ca8f59f1-45c2-46e6-8261-463c8c5f21d3
 
 | Base model | Memory checkpoint | Deployment |
 | --- | --- | --- |
-| Qwen3.8-27B | [Qwen3.8-27B-REMORY-1.9B](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B) | SGLang, Transformers |
+| Qwen3.8-27B | [Qwen3.8-27B-REMORY-1.9B](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B) | [SGLang](docs/deployment.md#launch), [Transformers](docs/deployment.md#transformers) |
 | GLM-5.3-Flash | [GLM-5.3-Flash-REMORY-1.24B](https://huggingface.co/mocoV3/GLM-5.3-Flash-REMORY-1.24B) | [SGLang](docs/deployment.md#glm-53-flash) |
 
 The GLM release is the 1.24B checkpoint used in local evaluations, distinct from
