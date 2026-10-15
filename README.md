@@ -128,6 +128,14 @@ Save the checkpoint with the conversation. For the next compaction, pass it as
 complete Responses provider and an interactive launcher.
 See the [API reference](docs/api.md) for native SGLang requests with memory.
 
+## Training
+
+The [Qwen3.8-27B training guide](training) includes the Stage I reconstruction
+trainer, Stage II summary-conditioned residual-memory trainer, four-GPU launch
+commands, and checkpoint/resume instructions. Both stages freeze Qwen and train
+only the memory network. [Synthetic JSONL examples](training/examples) show the
+document and history/summary/continuation formats, with CPU preparation commands.
+
 ## Results
 
 ![BrowseComp and Terminal-Bench 2.1 scores for Qwen3.8-27B and GLM-5.3-Flash, with and without residual memory.](assets/benchmarks.png)

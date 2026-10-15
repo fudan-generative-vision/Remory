@@ -3,8 +3,10 @@
 `src/remory/models/layers.py`, `src/remory/models/compressor.py`, and
 `src/remory/pyramid.py` are inference-focused adaptations of the Recursive Memory
 implementation (MIT, copyright 2026 Recursive Memory contributors). The loader
-supports the public Qwen and GLM memory releases. Training-loss code, target
-training wrappers, training launchers, and evaluation harnesses were excluded.
+supports the public Qwen and GLM memory releases. The runtime package excludes
+training-loss code and training launchers. The separate `training/` directory
+contains Qwen3.8-27B Stage I/II source snapshots and their shared dependencies;
+provenance and checksums are recorded in `training/source-manifest.json`.
 
 The compressor architecture incorporates work from
 [SpecForge](https://github.com/sgl-project/SpecForge) (MIT; upstream provenance
@@ -28,7 +30,11 @@ weight licenses are separate from this code license.
 
 Codex is an independent upstream project, licensed under Apache-2.0. The
 launcher downloads its unmodified upstream binary and reads its bundled model
-instructions at runtime. Codex is not redistributed in this repository. The
+instructions at runtime. The Codex binary is not redistributed. The local compact
+prompt from Codex CLI 0.149.0 is retained in
+`training/context_compression/codex_compact_v0149.py` for training-summary
+preparation, with its exact prompt checksum and upstream provenance. Its
+Apache-2.0 license is included in `LICENSES/Codex-Apache-2.0.txt`. The
 integration does not imply upstream endorsement. The provider and launcher
 adapt the local Recursive Memory inference harness (MIT).
 

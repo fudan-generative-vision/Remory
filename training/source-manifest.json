@@ -1,0 +1,264 @@
+{
+  "scope": "Qwen3.8-27B Stage I reconstruction and Stage II offline summary-conditioned continuation",
+  "sources": [
+    {
+      "path": "context_compression/__init__.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "2b33959b7e4c48efeea0d90ffccb77e2784c0f28124e4e0ad235e32789497830"
+    },
+    {
+      "path": "context_compression/codex_compact_v0149.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "afacede5a07e4c0c2a25f9bbc8dedf13a832b46a464904200ad3e929183c6f09"
+    },
+    {
+      "path": "context_compression/dflash2_grouped_conv.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "4572b5a377b6217dab9dc067660c411316906ab2a9860c4eb87201579fcee943"
+    },
+    {
+      "path": "context_compression/dflash2_parallel.py",
+      "source_snapshot": "20261007-qwen38-dflash2-stage1-3b",
+      "sha256": "a3f0f1cb5d019b96a95c9abf8e40b8338f1abaf281a8fff3fe79422e9d55b327"
+    },
+    {
+      "path": "context_compression/export_qwen36_fsdp_checkpoint.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "8e242cd3f6d6864c6a555d3924866af39fd7b76a34ae6ba9870675b8da3009b8"
+    },
+    {
+      "path": "context_compression/export_qwen38_repeat_state.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "c42309752c0db222721af40792b4c91bc8ae3cc992deb1e02155a3bb32b677c3"
+    },
+    {
+      "path": "context_compression/export_qwen38_residual_training_state.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "5ac79118f99be972d8c88a5ab58092313a4b50d075676bdec1eddaf6c038ec67"
+    },
+    {
+      "path": "context_compression/grepseek_modeling.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "933e32b979056a39404cd52c004bd95b490098dde30ad3dd31d8a3b999216142"
+    },
+    {
+      "path": "context_compression/grepseek_serving_contract.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "7d4af95981417323801fa5eff6aae244e7ebdb57f7dcf424c2cf0692a40a9aa5"
+    },
+    {
+      "path": "context_compression/layout.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "d928349a040a7efbd5b18675a80305b056cc38cb0cc1965f3467b1cc0af5d4f7"
+    },
+    {
+      "path": "context_compression/losses.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "a1958648e66e91c5c72eca7d687a21518784193e49c6d23d631eb5ff41489153"
+    },
+    {
+      "path": "context_compression/mindforge_ce_manifest.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "b6c4924cee559e2c15df3afc9c8588426d76fe374c8052e1a1070d15e83209fb"
+    },
+    {
+      "path": "context_compression/mindforge_glm52_data.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "fe92efdcb2bb91bb8147d6282c978e073d8072ea9950f66cef40dd48d7c452be"
+    },
+    {
+      "path": "context_compression/mmfine_reasoning_data.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "0d43b3a970d67b979fae120e26a248add4564e421545c1b00d32b2c18d93b19c"
+    },
+    {
+      "path": "context_compression/modeling.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "c3fc592e5aad02e8209f63b81a1fc0f7eb66236aab12d94400ffb64f5351cb04"
+    },
+    {
+      "path": "context_compression/prepare_qwen38_codex_summaries.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "e42d630bfab9e576edcb8fcd63ffecaedd180c782d6da906597af052944467c0"
+    },
+    {
+      "path": "context_compression/prepare_qwen38_residual_summaries.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "493ff87b3526c652bb839c3c9a5e2bc4ade4537fc744ede5c8ef5eecb264f735"
+    },
+    {
+      "path": "context_compression/prepare_qwen38_summary_selection.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "476b6539fb1abf15670c4c8d0527f8e57c0e812956928d5cce95491ce5243a7f"
+    },
+    {
+      "path": "context_compression/qwen35_text_target.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "53c01efa121933e57fa6bf21e73a46c63bd9edc1e54186a42b7d2ef9993423b7"
+    },
+    {
+      "path": "context_compression/qwen36_agentic_data.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "9dbaace9dbcc0d36aabe5ee197b58b4e54ee1423f2418ef18252fa1bbf55adda"
+    },
+    {
+      "path": "context_compression/qwen36_recursive_data.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "7f63452b3c25e33e355023aea277001791092c8a89944771afcb07fecb11098c"
+    },
+    {
+      "path": "context_compression/qwen36_teacher_parity.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "0edc15c72e2e13ac0655b1b834a0f413e7ca8f7a075dc7712f33f1de440d4ad7"
+    },
+    {
+      "path": "context_compression/qwen38_allturn_data.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "d3b6213da93df5a1890d061e95ec7e144ad77e494a284c7dbdd5056efe33e632"
+    },
+    {
+      "path": "context_compression/qwen38_allturn_training.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "543e6be5890638096f5240862c19bd25eb2b94552590b2ea04fc493295d9c5a6"
+    },
+    {
+      "path": "context_compression/qwen38_coding_trajectory_data.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "cd08f7830e0cb64d54e5560504c9f39c49700a633432e105ddda4b7c056e4a10"
+    },
+    {
+      "path": "context_compression/qwen38_dflash2_compressor.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "5ed515a294c371e17adeeac3330ce3e5dc50f2bce092a01121bd1fd5bef5f369"
+    },
+    {
+      "path": "context_compression/qwen38_dflash2_residual.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "a5a825ba2326878c5b71b87ffe25f37b0c786fd8583445f248950c2454179d2d"
+    },
+    {
+      "path": "context_compression/qwen38_long_history_data.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "ad7156471afbe528767affddd22afbf60944f30e7c9d520355972905406c6b62"
+    },
+    {
+      "path": "context_compression/qwen38_long_repeat_data.py",
+      "source_snapshot": "20261007-qwen38-dflash2-stage1-3b",
+      "sha256": "37e53b835ac050d8654fe0ce09fb2f1beff64e861093cc13263660aa4d678d72"
+    },
+    {
+      "path": "context_compression/qwen38_long_repeat_kl.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "df9c00143afda5a1fdc654be7f66285222c9a03c2205b2d441082c4ac09dcf44"
+    },
+    {
+      "path": "context_compression/qwen38_multimodal_target.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "d49e18402ac7059cbdf771648522b9fa4dac1007bc592c7d4297dc8e1ee86647"
+    },
+    {
+      "path": "context_compression/qwen38_residual_checkpoint.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "de7b917407bc69d14d0c548e5f2bf37538bc4cb66e4ac50b5b2c7c569fd86536"
+    },
+    {
+      "path": "context_compression/qwen38_residual_curriculum.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "926c5f27dbc88f9e5d7ed083b390f3853690f32af5c2c5c458e4a163bcc21441"
+    },
+    {
+      "path": "context_compression/qwen38_residual_data.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "c52e682115c60cc72bb4f7902c53b7edae2db89db634df602b0540e30677b011"
+    },
+    {
+      "path": "context_compression/qwen38_residual_modeling.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "558adc6f350406c3b399d3ebc553582543f6aeb6edae659d2fe9a65b54b85dee"
+    },
+    {
+      "path": "context_compression/qwen38_residual_pyramid.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "ea933d80c7aa1072ce0a4337e924d24bf205293baa95a805264c0730f8996ae9"
+    },
+    {
+      "path": "context_compression/qwen38_residual_streaming.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "13da233bcbbbac0a11b7082828bfb14c355caeda0e88f884e34c43a5f1c8b6b1"
+    },
+    {
+      "path": "context_compression/qwen38_residual_training.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "e03a7de0c26387079a4eb24d13837abd9b99f398e7b0a787faecd4020375f172"
+    },
+    {
+      "path": "context_compression/qwen38_reverse_kl.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "96ee3cac2b313f48d31c01e8f839293c31c97e61d72bb435bb3793cdf9af7a56"
+    },
+    {
+      "path": "context_compression/r2eact_serving_contract.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "77cbd2f69522005fc848f2e7445ab25eeaab234270cd51d1f94e693d9ff7fa04"
+    },
+    {
+      "path": "context_compression/stage2_batch_order.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "d49f0f9903dfdcda4f80a19cd557f52928c7fd989283696cba98edc9d27151f3"
+    },
+    {
+      "path": "context_compression/stage2_memory_policy.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "82d11d8c369eaa21a636d9cbf14558d36e256eba9fd42336db641f67126ecdba"
+    },
+    {
+      "path": "context_compression/train_dflash2_pretrain_3b.py",
+      "source_snapshot": "20261007-qwen38-dflash2-stage1-3b",
+      "sha256": "1b3bc24cd2c01bbb54701649a44bcd66bcb21cd0ef72f9032a283a1f0d168b50"
+    },
+    {
+      "path": "context_compression/train_qwen36_recursive_compressor.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "3cdb4ec7179dd6861433a7eb799b3f21bc2fa1bbcb9a082f45e054ca53aac16c"
+    },
+    {
+      "path": "context_compression/train_qwen38_allturn_residual_kl.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "3cc4471031c3d926916d44039182759c5d7990462b887db1681c71f5cc271a22"
+    },
+    {
+      "path": "context_compression/train_qwen38_dflash2_stage2.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "a6b894f8e44ea9565f483d61e9b84946ed2c81f09caa48c6c2271f7a8dd4aea7"
+    },
+    {
+      "path": "context_compression/train_qwen38_long_repeat.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "9c1da604fe7ca0e6d68f3bbc1cec4ee242c436b324b0843fa4f617ce9c61e9ce"
+    },
+    {
+      "path": "context_compression/train_qwen38_mmfine_joint.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "87355e2cf494fb402e93cdaf85d9b2093b015641f92fc7e53c2ae088ba8aa2bd"
+    },
+    {
+      "path": "specforge/data/decontamination.py",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "cbd08613e73116e706e313d3e65c5a0288f6e15ef398818111739a7d5df87d25"
+    },
+    {
+      "path": "context_compression/dflash2_LICENSE",
+      "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
+      "sha256": "da25818d68a3da676fed16a019beadd6b12f5e4d59ade85840c23a6070240323"
+    }
+  ],
+  "entrypoints": [
+    "context_compression.train_dflash2_pretrain_3b",
+    "context_compression.train_qwen38_dflash2_stage2",
+    "context_compression.prepare_qwen38_codex_summaries",
+    "context_compression.export_qwen38_residual_training_state"
+  ],
+  "shared_data_builder": "Stage I batched-tokenization implementation; dataset loader is identical to the Stage II copy.",
+  "published_qwen_checkpoint": "mocoV3/Qwen3.8-27B-REMORY-1.9B",
+  "training_parent": "Stage I checkpoint 8000; Stage II lr1e-4 fixed-batch epoch shuffle, exported at step14925."
+}

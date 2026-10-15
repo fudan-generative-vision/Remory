@@ -1,0 +1,115 @@
+{
+  "compressor": {
+    "architecture": "DFlash2SummaryResidualCompressor",
+    "compression_ratio": 16,
+    "depth_coordinate": "input_depth_raw_is_zero",
+    "gradient_checkpointing": false,
+    "head_dim": 128,
+    "hidden_size": 5120,
+    "intermediate_size": 17408,
+    "layer_types": [
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention"
+    ],
+    "local_window": 2048,
+    "max_depth": 8,
+    "num_attention_heads": 32,
+    "num_hidden_layers": 5,
+    "num_key_value_heads": 8,
+    "output_embedding_rms": 0.012734529562294483,
+    "selected_source_width": 25600,
+    "slot_padding_side": "left",
+    "summary_conditioning": "independent_slot_Q_summary_KV_after_source_attention",
+    "summary_gate_init": 0.001,
+    "target_hidden_size": 5120,
+    "target_layer_ids": [
+      5,
+      19,
+      33,
+      47,
+      61
+    ],
+    "dflash2": {
+      "block_size": 8,
+      "conv_group_size": 16,
+      "conv_kernel_size": 2,
+      "mask_token_id": 248070,
+      "selector_rank": 256,
+      "selector_top_k": 16,
+      "target_layer_ids": [
+        5,
+        19,
+        33,
+        47,
+        61
+      ]
+    },
+    "candidate_selector": false,
+    "attention_layout": "four_local_source_reads_then_global_slot_only",
+    "convolution_layout": "causal_groups_of_8_consecutive_slots_right_padded"
+  },
+  "epochs": 5,
+  "seed": 20260917,
+  "optimizer": {
+    "accumulate_min_tokens": 16384,
+    "betas": [
+      0.9,
+      0.95
+    ],
+    "eps": 1e-08,
+    "learning_rate": 0.0001,
+    "moment_residency": "GPU_resident_full_replica",
+    "normalization": "scored_token_mean",
+    "type": "AdamW",
+    "update_boundary": "whole_response_only",
+    "warmup_steps": 500,
+    "weight_decay": 0.01,
+    "schedule": "linear_warmup_then_cosine_decay",
+    "minimum_learning_rate": 1e-05,
+    "minimum_responses_per_update": 4
+  },
+  "objective": "full_vocabulary_reverse_KL_student_to_raw_teacher_T1_no_CE",
+  "position_weighting": {
+    "alpha": 1.0,
+    "coordinate": "original_response_token_offset_no_chunk_reset",
+    "formula": "(1+alpha*(1+position/tau)^(-power))/response_mean",
+    "power": 0.5,
+    "tau": 64.0
+  },
+  "target_lora": false,
+  "target_trainable_parameters": 0,
+  "format_version": 2,
+  "schema": "qwen38_stage1_dflash2_offline_stage2_source_v1",
+  "residual": {
+    "block_tokens": 1024,
+    "compression_ratio": 16,
+    "coverage": "derived_independent_compression_events_not_all_source_responses",
+    "gradient": "detach_all_parent_inputs_exact_local_VJP_every_retained_frontier_node",
+    "memory_budget": 4096,
+    "offload_after_tokens": 131072,
+    "policy": "budget_driven_oldest_adjacent_equal_depth_pyramid",
+    "projection_chunk_tokens": 64,
+    "raw_prefix": "native_system_and_tools",
+    "student": "summary_plus_soft_memory_plus_same_correct_answer_prefix",
+    "summary_version": "full_causal_history_rebuild_every_response_same_summary_all_levels",
+    "teacher": "uncompressed_history_plus_correct_answer_prefix",
+    "window_tokens": null
+  },
+  "summary_delivery": "sealed_full_cache",
+  "batch_order": {
+    "schema": "fixed_length_bucket_batch_shuffle_v1",
+    "seed": 20260917,
+    "epoch_seed": "seed_plus_zero_based_epoch",
+    "base_batches": "immutable_context_ascending_whole_response_batches",
+    "permutation": "python_random_Random_shuffle",
+    "cursor": "response_offset_in_epoch_permuted_batch_plan",
+    "rebatch_after_shuffle": false
+  },
+  "pretrained": {
+    "repository": "incoai/Qwen3.8-27B-DFlash2",
+    "revision": "015e795645c74b1a0eeef3b570031fb62e769bc5"
+  }
+}
