@@ -4,9 +4,10 @@ import httpx
 
 class Client:
     def __init__(self, url: str, *, session_id: str, timeout: float = 600,
-                 transport=None):
+                 transport=None, trust_env=True):
         self.http = httpx.Client(base_url=url.rstrip("/") + "/", timeout=timeout,
-                                 headers={"X-Remory-Session": session_id}, transport=transport)
+                                 headers={"X-Remory-Session": session_id}, transport=transport,
+                                 trust_env=trust_env)
 
     def __enter__(self):
         return self

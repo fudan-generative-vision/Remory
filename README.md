@@ -74,6 +74,14 @@ This opens the native Codex UI with Remory compaction. Use `/compact` during a
 session and `r-codex resume --last` to return later. Codex is installed on first
 use. See [Codex](integrations/codex) for sessions, sub-agents, and MCP tools.
 
+For the research demo's web search and document tools, enable
+`--research-tools`. This requires **`SERPER_API_KEY`** and **`MINERU_API_KEY`**
+(`MINERU_API_TOKEN` is also accepted), plus the separate Docling/MinerU tool
+environment. Run `r-codex tools` to check your setup. See
+[research tools and API keys](integrations/codex/README.md#research-tools-and-api-keys)
+for installation and configuration; local chat and shell/file tools need no
+external API key.
+
 ### Generate and compact through the API
 
 ```bash

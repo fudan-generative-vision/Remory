@@ -19,6 +19,8 @@ import httpx
 
 from .install import ensure_codex
 from .provider import Provider, atomic_json, create_app
+from .sessions import attach_existing, choose_session, sessions_in
+from .tools import INSTRUCTIONS, require_tools, research_servers, tool_status
 
 
 def data_root():
@@ -36,49 +38,23 @@ def session_path(root, name):
 
 
 def sessions(root):
-    found = []
-    for path in (root / 'sessions').glob('*/session.json'):
-        if path.parent.is_symlink():
-            continue
-        try:
-            item = json.loads(path.read_text())
-            found.append(item)
-        except (OSError, ValueError):
-            continue
-    return sorted(found, key=lambda x: x.get('updated_at', 0), reverse=True)
+    return sessions_in(root)
 
 
 def select_session(root):
-    import curses
-    rows = sessions(root)
-    if not rows:
+    return choose_session(root)
+
+
+def last_session(root):
+    available = sessions(root)
+    if not available:
         raise ValueError('No saved sessions. Run r-codex to start one.')
-    def screen(window):
-        curses.curs_set(0)
-        window.keypad(True)
-        selected = 0
-        while True:
-            window.erase()
-            height, width = window.getmaxyx()
-            window.addnstr(0, 0, 'Remory sessions  ·  ↑/↓ select  ·  Enter resume  ·  Esc cancel',
-                           max(1, width - 1), curses.A_BOLD)
-            offset = max(0, selected - max(1, height - 4))
-            for i, item in enumerate(rows[offset:offset + max(1, height - 2)], offset):
-                line = f"{item['session']}  {item.get('title') or item['workspace']}"
-                line = ' '.join(''.join(c if c.isprintable() else ' ' for c in line).split())
-                window.addnstr(i - offset + 2, 0, line, max(1, width - 1),
-                               curses.A_REVERSE if i == selected else 0)
-            window.refresh()
-            key = window.getch()
-            if key in (27, 3, ord('q')):
-                return None
-            if key in (10, 13, curses.KEY_ENTER):
-                return rows[selected]['session']
-            if key in (curses.KEY_UP, ord('k')):
-                selected = max(0, selected - 1)
-            elif key in (curses.KEY_DOWN, ord('j')):
-                selected = min(len(rows) - 1, selected + 1)
-    return curses.wrapper(screen)
+    try:
+        name = json.loads((root / 'last.json').read_text())['session']
+    except (OSError, ValueError, KeyError, TypeError):
+        name = None
+    return next((item['session'] for item in available if item['session'] == name),
+                available[0]['session'])
 
 
 def toml(value):
@@ -95,6 +71,10 @@ def environment(directory, token):
         if key.startswith(('CODEX_', 'OPENAI_')):
             env.pop(key)
     env.update(CODEX_HOME=str(directory / '.codex'), REMORY_CODEX_TOKEN=token)
+    # Keep web/document proxies, but never proxy the local Responses service.
+    bypass = set(filter(None, (env.get('NO_PROXY', '') + ',' + env.get('no_proxy', '')).split(',')))
+    bypass.update({'localhost', '127.0.0.1', '::1'})
+    env['NO_PROXY'] = env['no_proxy'] = ','.join(sorted(bypass))
     return env
 
 
@@ -175,7 +155,7 @@ def run(args):
     resuming = args.action == 'resume'
     name = args.session
     if resuming and args.last:
-        name = json.loads((root / 'last.json').read_text())['session']
+        name = last_session(root)
     if resuming and name is None:
         name = select_session(root)
         if name is None:
@@ -185,12 +165,26 @@ def run(args):
     if resuming:
         manifest = json.loads((directory / 'session.json').read_text())
         workspace = Path(manifest['workspace'])
+        saved = next((item for item in sessions(root) if item['session'] == name), None)
+        if saved is None:
+            raise ValueError('This session has no saved Codex conversation')
+        attached = attach_existing(directory)
+        if attached is not None:
+            return attached
     else:
         workspace = Path(args.directory or Path.cwd()).expanduser().resolve()
         manifest = {'session': name, 'workspace': str(workspace), 'created_at': time.time(),
                     'title': args.prompt or '', 'session_id': secrets.token_hex(24)}
     if not workspace.is_dir():
         raise ValueError('Working directory does not exist: ' + str(workspace))
+    research_tools = args.research_tools or manifest.get('research_tools', False)
+    if resuming and research_tools != manifest.get('research_tools', False):
+        raise ValueError('Start a new session with --research-tools; existing sessions keep their tool profile')
+    tools_venv = args.tools_venv or manifest.get('tools_venv') or os.environ.get('REMORY_TOOLS_VENV')
+    if tools_venv:
+        tools_venv = str(Path(tools_venv).expanduser().resolve())
+    if research_tools:
+        require_tools(tools_venv)
     if not resuming:
         directory.mkdir(parents=True, mode=0o700)  # Never overwrite an existing session.
     with (directory / 'session.lock').open('a') as lock:
@@ -210,16 +204,19 @@ def run(args):
         if resuming and manifest.get('identity') != info['identity']:
             raise ValueError('Server model/checkpoint changed; start a new session')
         config = info['config']
-        binary = ensure_codex(root / 'cache', args.codex)
+        codex = args.codex or manifest.get('codex')
+        model_path = args.model_path or manifest.get('model_path')
+        binary = ensure_codex(root / 'cache', codex)
         from transformers import AutoTokenizer
         from ..metadata import resolve_tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(resolve_tokenizer(config, args.model_path))
+        tokenizer = AutoTokenizer.from_pretrained(resolve_tokenizer(config, model_path))
         limit = info['context_limit']
         provider = Provider(url, info, tokenizer, directory / 'provider',
                             session_id=manifest['session_id'],
                             max_new_tokens=min(16384, limit // 4))
         token = secrets.token_hex(32)
         env = environment(directory, token)
+        tool_servers = research_servers(directory, tools_venv, env=env) if research_tools else {}
         catalog = build_catalog(binary, directory, env, limit, config['target_model'] + ' + Remory')
         with serve(provider, token) as base_url:
             runtime = dict(model='remory', model_provider='remory_local',
@@ -228,8 +225,7 @@ def run(args):
                 model_reasoning_effort='high', check_for_update_on_startup=False,
                 approval_policy='on-request', sandbox_mode='workspace-write',
                 sandbox_workspace_write={'network_access': True},
-                features={'unified_exec': True, 'goals': True, 'multi_agent': True,
-                          'api_key_model_discovery': False},
+                features={'unified_exec': True, 'goals': True, 'multi_agent': True},
                 agents={'max_threads': 4, 'max_depth': 1}, web_search='disabled',
                 projects={str(workspace): {'trust_level': 'trusted'}},
                 model_providers={'remory_local': {
@@ -242,18 +238,28 @@ def run(args):
             if mcp_config:
                 import tomllib
                 mcp_path = Path(mcp_config).expanduser().resolve()
-                runtime['mcp_servers'] = tomllib.loads(mcp_path.read_text()).get('mcp_servers', {})
+                custom_servers = tomllib.loads(mcp_path.read_text()).get('mcp_servers', {})
+                duplicate = set(custom_servers) & set(tool_servers)
+                if duplicate:
+                    raise ValueError('MCP config duplicates bundled research tools: ' + ', '.join(sorted(duplicate)))
+                tool_servers.update(custom_servers)
                 manifest['mcp_config'] = str(mcp_path)
+            if tool_servers:
+                runtime['mcp_servers'] = tool_servers
+            if research_tools:
+                runtime['developer_instructions'] = INSTRUCTIONS
             (directory / '.codex/config.toml').write_text('\n'.join(
                 f'{k} = {toml(v)}' for k, v in runtime.items()) + '\n')
             (directory / '.codex/config.toml').chmod(0o600)
             manifest.update(identity=info['identity'], model=config['target_model'], url=url,
-                            updated_at=time.time(), status='running')
+                            updated_at=time.time(), status='running', pid=os.getpid(),
+                            research_tools=research_tools, tools_venv=tools_venv,
+                            codex=str(binary), model_path=model_path)
             atomic_json(directory / 'session.json', manifest)
             atomic_json(root / 'last.json', {'session': name})
             command = [str(binary)]
             if resuming:
-                thread = provider.meta['root_thread_id']
+                thread = saved['thread_id']
                 if thread:
                     command += ['resume', thread]
                 else:
@@ -274,6 +280,20 @@ def run(args):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == 'tools':
+        parser = argparse.ArgumentParser(prog='r-codex tools',
+            description='Check research-tool configuration without making API requests.')
+        parser.add_argument('--tools-venv', default=os.environ.get('REMORY_TOOLS_VENV'))
+        args = parser.parse_args(argv[1:])
+        try:
+            status = tool_status(args.tools_venv)
+        except ValueError as exc:
+            print(f'r-codex: {exc}', file=sys.stderr)
+            return 1
+        for name, item in status.items():
+            print(f"{name}: {'configured' if item['ready'] else 'missing ' + item['needs']}")
+        print('This checks local configuration only; API validity and quota are checked when a tool is used.')
+        return 0 if all(item['ready'] for item in status.values()) else 1
     action = argv.pop(0) if argv and argv[0] in {'resume', 'list'} else 'new'
     if action == 'list':
         for item in sessions(data_root()):
@@ -285,6 +305,9 @@ def main(argv=None):
     parser.add_argument('--model-path', help='Local actor/tokenizer directory; no weights are loaded by this client')
     parser.add_argument('--codex', help='Use an existing Codex 0.149.0 executable')
     parser.add_argument('--mcp-config', help='TOML file containing optional mcp_servers')
+    parser.add_argument('--research-tools', action='store_true',
+                        help='Enable Serper search, Docling, and MinerU (requires tool packages and API keys)')
+    parser.add_argument('--tools-venv', help='Separate document-tool venv (or REMORY_TOOLS_VENV)')
     parser.add_argument('--unsafe', action='store_true', help='Disable native approvals and sandbox')
     parser.add_argument('-C', '--directory', help='Working directory for a new session')
     if action == 'resume':

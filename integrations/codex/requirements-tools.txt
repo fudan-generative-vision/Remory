@@ -1,0 +1,8 @@
+# Install CPU torch/torchvision from the PyTorch CPU index first; see README.md.
+# These tools live in a separate venv, not the SGLang serving environment.
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
+docling-mcp[local]==2.2.1
+mineru-open-mcp==1.0.21
+opencv-python-headless==5.0.0.93
+onnxruntime

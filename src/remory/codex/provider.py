@@ -23,6 +23,13 @@ class CodexChatTemplate(ChatTemplate):
     post-compaction tool continuation. A temporary boundary is removed before
     tokenization; it is never submitted to the model.
     """
+    def summary(self, text):
+        # Quoted vision markers in code/tool output are ordinary text, not image
+        # attachments. Actual images use the separate _image request below.
+        for marker in ('<|image_pad|>', '<|video_pad|>', '<|vision_start|>', '<|vision_end|>'):
+            text = text.replace(marker, marker.replace('<', r'\u003c').replace('>', r'\u003e'))
+        return super().summary(text)
+
     def split(self, prefix_messages, messages, *, generation=False):
         boundary = {'role': 'user', 'content': 'REMORY_TEMPLATE_BOUNDARY'}
         kwargs = dict(tools=self.tools, tokenize=False, **self.template_kwargs)
@@ -87,7 +94,7 @@ class Provider:
     @contextmanager
     def client(self):
         with Client(self.url, session_id=self.session_id, timeout=1800,
-                    transport=self.transport) as client:
+                    transport=self.transport, trust_env=False) as client:
             yield client
 
     def _thread(self, headers):
@@ -141,7 +148,7 @@ class Provider:
                       'Describe this image for a coding agent. Include visible text, layout, '
                       'errors, and details useful for debugging. Do not invent unseen content.'
                       '<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n')
-            with httpx.Client(timeout=1800, transport=self.transport) as http:
+            with httpx.Client(timeout=1800, transport=self.transport, trust_env=False) as http:
                 response = http.post(self.url + '/generate', json={'text': prompt,
                     'image_data': [url], 'sampling_params': {'temperature': 0, 'max_new_tokens': 2048}})
                 response.raise_for_status()

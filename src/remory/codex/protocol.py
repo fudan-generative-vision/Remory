@@ -68,6 +68,7 @@ def content_text(content, *, image_reader=None):
 
 def messages_from_wire(items, *, image_reader=None):
     messages, calls = [], {}
+    pending = set()
     for item in items:
         kind = item.get('type', 'message' if 'role' in item else None)
         if kind == 'message':
@@ -77,7 +78,11 @@ def messages_from_wire(items, *, image_reader=None):
             if role not in {'user', 'assistant', 'system'}:
                 raise ValueError('Unsupported message role: ' + str(role))
             text = content_text(item.get('content'), image_reader=image_reader)
-            messages.append({'role': role, 'content': text})
+            if role == 'assistant' and messages and messages[-1]['role'] == 'assistant':
+                previous = messages[-1]['content']
+                messages[-1]['content'] = previous + ('\n' if previous and text else '') + text
+            else:
+                messages.append({'role': role, 'content': text})
         elif kind in {'function_call', 'custom_tool_call'}:
             alias = (item['namespace'] + '__' if item.get('namespace') else '') + item['name']
             args = ({'input': item['input']} if kind == 'custom_tool_call'
@@ -86,12 +91,18 @@ def messages_from_wire(items, *, image_reader=None):
                 raise ValueError('Tool arguments must be an object')
             call = {'id': item['call_id'], 'type': 'function',
                     'function': {'name': alias, 'arguments': args}}
+            if item['call_id'] in calls:
+                raise ValueError('Duplicate tool call ID')
             calls[item['call_id']] = alias
+            pending.add(item['call_id'])
             if messages and messages[-1]['role'] == 'assistant':
                 messages[-1].setdefault('tool_calls', []).append(call)
             else:
                 messages.append({'role': 'assistant', 'content': '', 'tool_calls': [call]})
         elif kind in {'function_call_output', 'custom_tool_call_output'}:
+            if item['call_id'] not in pending:
+                raise ValueError('Tool output has no pending call: ' + item['call_id'])
+            pending.remove(item['call_id'])
             output = item.get('output', '')
             if not isinstance(output, (list, str)):
                 output = json.dumps(output, ensure_ascii=False)
@@ -103,11 +114,17 @@ def messages_from_wire(items, *, image_reader=None):
             summary = item.get('summary', [])
             text = '\n'.join(p.get('text', '') for p in summary)
             if text:
-                messages.append({'role': 'assistant', 'content': '', 'reasoning_content': text})
+                if messages and messages[-1]['role'] == 'assistant':
+                    previous = messages[-1].get('reasoning_content', '')
+                    messages[-1]['reasoning_content'] = previous + ('\n' if previous else '') + text
+                else:
+                    messages.append({'role': 'assistant', 'content': '', 'reasoning_content': text})
         elif kind in {'compaction', 'compaction_trigger'}:
             raise ValueError('Compaction items must be resolved before rendering')
         else:
             raise ValueError('Unsupported Responses item: ' + str(kind))
+    if pending:
+        raise ValueError('Missing tool outputs: ' + ', '.join(sorted(pending)))
     return messages
 
 
