@@ -8,7 +8,7 @@ it, helping the frozen model continue its work across compactions.
 [💻 **Code**](https://github.com/1ring2rta/Remory) |
 [🤗 **Models**](#models)
 
-https://github.com/user-attachments/assets/ca8f59f1-45c2-46e6-8261-463c8c5f21d3
+https://github.com/user-attachments/assets/4336f662-53b2-490e-90a8-07fb0aff50b6
 
 <sub>Music: <a href="https://www.scottbuckley.com.au/library/electric-dreams/">Electric Dreams</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="assets/README.md#demo">Credits &amp; edit details</a></sub>
 

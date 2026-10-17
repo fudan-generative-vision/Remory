@@ -11,8 +11,9 @@ Source: [Remory preprint](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B/
 
 ## Demo
 
-The 96-second video opens with a rotating anatomical brain illustration, then
-uses the paper's method diagram and recorded Qwen and GLM task traces. It moves
+The 93.5-second video opens with **REMORY — Reinventing agent memory** alongside
+a rotating anatomical brain illustration. This combined opening goes directly
+into the paper's method diagram and recorded Qwen and GLM task traces. It moves
 from a paired Core War replay to nine tasks in a 3×3 grid,
 covering coding and web research. Each task shows both runs side by side, with
 matching context-chart axes and separate request, repeat, error, and compaction
@@ -50,7 +51,7 @@ time includes waiting and service restarts, rather than continuous inference.
 Music: [Electric Dreams](https://www.scottbuckley.com.au/library/electric-dreams/)
 by [Scott Buckley](https://www.scottbuckley.com.au), released under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-The excerpt is trimmed to 95.67 seconds, faded in and out, and level-adjusted.
+The excerpt is trimmed to 93.50 seconds, faded in and out, and level-adjusted.
 
 Brain illustration and animation: adapted from the
 [Harvard–Oxford atlas distributed by FSL](https://fsl.fmrib.ox.ac.uk/fsl/docs/other/datasets.html).
