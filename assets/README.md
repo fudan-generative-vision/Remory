@@ -11,9 +11,9 @@ Source: [Remory preprint](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B/
 
 ## Demo
 
-The 93.5-second video opens with **REMORY — Reinventing agent memory** alongside
-a rotating anatomical brain illustration. This combined opening goes directly
-into the paper's method diagram and recorded Qwen and GLM task traces. It moves
+The 93.5-second video opens with **REMORY**, the paper title, and a rotating
+anatomical brain illustration. It then uses the paper's method diagram and
+recorded Qwen and GLM task traces, moving
 from a paired Core War replay to nine tasks in a 3×3 grid,
 covering coding and web research. Each task shows both runs side by side, with
 matching context-chart axes and separate request, repeat, error, and compaction
