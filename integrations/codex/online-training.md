@@ -19,6 +19,12 @@ compaction** in this session. Existing memory tensors remain unchanged, and
 other sessions retain their encoder versions. The picker includes the released
 checkpoint so you can switch back.
 
+After selection, the picker closes and reports checkpoint verification in the
+transcript. `\remory status` and `\remory help` remain available during that work.
+Other load/train/stop commands run in submission order; repeating a pending
+command reports that it is already in progress instead of submitting it twice.
+Choose Cancel or press Esc while the picker is open to keep the current version.
+
 ## One-time setup
 
 Update your clone and [serving installation](../../docs/deployment.md#upgrade).

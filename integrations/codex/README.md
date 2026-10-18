@@ -40,6 +40,7 @@ or encode leaves the existing context intact.
 r-codex resume          # Choose a saved session
 r-codex resume --last
 r-codex resume SESSION
+r-codex resume NATIVE_THREAD_UUID
 r-codex list
 ```
 
@@ -54,6 +55,11 @@ the newest saved conversation when its previous target is gone or empty.
 A session running in tmux opens its existing pane; a session running outside
 tmux must be used in its original terminal. The launcher never starts two
 providers for the same session.
+
+The exit message prints `r-codex resume SESSION` for the session you just used.
+A native thread UUID also resolves to its saved r-codex session, preserving that
+session's provider state and history. If several saved sessions contain the same
+UUID, use the session ID from `r-codex list` to choose one explicitly.
 
 The selected tool profile, tool environment, Codex binary, and local tokenizer
 path are remembered on resume. API keys must still be present in the terminal's

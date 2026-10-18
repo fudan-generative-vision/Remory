@@ -45,6 +45,13 @@ recursion, and storage; the backend supplies encoding and embedding-aware genera
 
 ## Tested setup
 
+The 2026-10-18 r-codex follow-up fixes passed all 89 runtime tests. Native Codex
+0.149.0 terminal checks with fixture inference covered Unicode input, window
+resizing, the r-codex exit hint, and UUID resumption into the same saved session.
+They also covered checkpoint verification, duplicate-command acknowledgement,
+queued commands, and status queries during verification and model generation.
+Picker cancellation and late responses are covered by the transport tests.
+
 On 2026-10-18, the online-training changes passed 131 Python tests, including
 the training suite. A native Codex 0.149.0 terminal smoke test exercised all four
 `\remory` commands, the checkpoint picker, and command input during a busy turn.

@@ -10,11 +10,11 @@ import pytest
 from remory.codex import cli, sessions
 
 
-def saved_session(root, name='saved', *, text='检查这个项目', provider_thread=False):
+def saved_session(root, name='saved', *, text='检查这个项目', provider_thread=False,
+                  thread='11111111-1111-1111-1111-111111111111'):
     folder = root / 'sessions' / name
     history = folder / '.codex/sessions/2026/10/16'
     history.mkdir(parents=True)
-    thread = '11111111-1111-1111-1111-111111111111'
     manifest = {'workspace': str(root), 'updated_at': 1, 'pid': 999999999}
     if provider_thread:
         (folder / 'provider').mkdir()
@@ -110,3 +110,45 @@ def test_proxy_environment_preserves_web_access_bypasses_local_provider(tmp_path
     assert env['NO_PROXY'] == env['no_proxy']
     assert 'OPENAI_API_KEY' not in env
     assert Path(env['CODEX_HOME']) == tmp_path / '.codex'
+
+
+def test_resume_native_uuid_reuses_existing_home(tmp_path, monkeypatch):
+    folder, _ = saved_session(tmp_path, provider_thread=True,
+                              thread='abcdefab-cdef-abcd-efab-cdefabcdefab')
+    thread = sessions.sessions_in(tmp_path)[0]['thread_id']
+    assert sessions.resolve_session(tmp_path, thread.upper()) == 'saved'
+    before = set((tmp_path / 'sessions').iterdir())
+    monkeypatch.setattr(cli, 'data_root', lambda: tmp_path)
+    attached = []
+    monkeypatch.setattr(cli, 'attach_existing', lambda path: attached.append(path) or 0)
+    args = SimpleNamespace(action='resume', session=thread, last=False)
+    assert cli.run(args) == 0
+    assert attached == [folder]
+    assert set((tmp_path / 'sessions').iterdir()) == before
+
+
+def test_resume_uuid_ambiguity_explicit_names_and_invalid_aliases(tmp_path):
+    saved_session(tmp_path, 'one')
+    saved_session(tmp_path, 'two')
+    thread = sessions.sessions_in(tmp_path)[0]['thread_id']
+    with pytest.raises(ValueError, match='Several sessions'):
+        sessions.resolve_session(tmp_path, thread)
+    assert sessions.resolve_session(tmp_path, 'one') == 'one'
+    # A named session wins even if its name looks like a native thread UUID.
+    saved_session(tmp_path, thread)
+    assert sessions.resolve_session(tmp_path, thread) == thread
+    with pytest.raises(ValueError, match='No saved r-codex session'):
+        sessions.resolve_session(tmp_path, 'missing')
+    with pytest.raises(ValueError, match='Invalid session name'):
+        sessions.resolve_session(tmp_path, '../one')
+    (tmp_path / 'sessions/link').symlink_to(tmp_path / 'sessions/one', target_is_directory=True)
+    with pytest.raises(ValueError, match='symlink'):
+        sessions.resolve_session(tmp_path, 'link')
+
+
+def test_uuid_lookup_ignores_deleted_and_empty_conversations(tmp_path):
+    saved_session(tmp_path, 'deleted')[1].unlink()
+    folder, _ = saved_session(tmp_path, 'empty', text='')
+    thread = json.loads((folder / 'session.json').read_text())['thread_id']
+    with pytest.raises(ValueError, match='No saved r-codex session'):
+        sessions.resolve_session(tmp_path, thread)

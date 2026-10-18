@@ -17,6 +17,26 @@ def clean(value):
     return ' '.join(''.join(c if c.isprintable() else ' ' for c in str(value or '')).split())
 
 
+def resolve_session(root, name):
+    """Map a native thread UUID back to its existing, isolated r-codex home."""
+    if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,95}', name):
+        raise ValueError('Invalid session name')
+    folder = Path(root) / 'sessions' / name
+    if folder.is_symlink():
+        raise ValueError('A session directory cannot be a symlink')
+    if (folder / 'session.json').is_file():
+        return name  # An explicit session name takes precedence over UUID aliases.
+    if re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', name):
+        matches = [item['session'] for item in sessions_in(root)
+                   if item['thread_id'].casefold() == name.casefold()]
+        if len(matches) > 1:
+            raise ValueError('Several sessions contain this thread; use the session ID from r-codex list')
+        if matches:
+            return matches[0]
+    raise ValueError('No saved r-codex session matches ' + name +
+                     '. Run r-codex resume to choose a session, or r-codex list to see its ID.')
+
+
 def locked(session):
     try:
         with (session / 'session.lock').open('rb') as stream:

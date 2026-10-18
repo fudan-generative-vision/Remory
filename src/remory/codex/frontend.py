@@ -19,10 +19,13 @@ from ..online.control import command
 class Connection:
     def __init__(self, client, upstream, control):
         self.client, self.upstream, self.control = client, upstream, control
-        self.lock, self.busy = threading.Lock(), threading.Lock()
+        self.lock, self.state_lock = threading.Lock(), threading.Lock()
+        self.jobs = queue.Queue()
+        self.pending = set()
         self.answers = {}
+        self.picker_turns = {}
         self.active_turns = {}
-        self.turn = None
+        self.local_turns = set()
         self.closed = threading.Event()
 
     def send(self, value):
@@ -56,79 +59,130 @@ class Connection:
     def run(self):
         relay = threading.Thread(target=self.upstream_messages, daemon=True)
         relay.start()
+        threading.Thread(target=self.work, daemon=True).start()
         try:
             for raw in self.client:
                 message = json.loads(raw)
                 ident = message.get('id')
-                if 'method' not in message and ident in self.answers:
-                    self.answers[ident].put(message)
+                with self.state_lock:
+                    waiter = self.answers.get(ident) if 'method' not in message else None
+                if waiter is not None:
+                    waiter.put(message)
                     continue
                 if 'method' not in message and isinstance(ident, str) and ident.startswith('remory-pick-'):
                     continue  # A late answer to a cancelled local picker.
                 args = command(message.get('params') or {}) if message.get('method') in ('turn/start', 'turn/steer', 'thread/queue/add') else None
                 if args is not None:
-                    if self.busy.acquire(blocking=False):
-                        threading.Thread(target=self.local, args=(message, args), daemon=True).start()
-                    else:
-                        self.send(dict(id=ident, error=dict(code=-32600, message='A REMORY command is already open.')))
-                elif message.get('method') == 'turn/interrupt' and (message.get('params') or {}).get('turnId') == self.turn:
-                    for waiter in list(self.answers.values()):
-                        waiter.put({'result': {'answers': {}}})
+                    self.accept(message, args)
+                elif message.get('method') == 'turn/interrupt' and self.cancel_picker(message):
                     self.send(dict(id=ident, result={}))
                 else:
                     self.upstream.send(raw)
         finally:
             self.closed.set()
             self.upstream.close()
-            for waiter in list(self.answers.values()):
+            self.jobs.put(None)
+            with self.state_lock:
+                waiters = list(self.answers.values())
+            for waiter in waiters:
                 waiter.put({'result': {'answers': {}}})
 
-    def local(self, request, args):
+    def cancel_picker(self, request):
+        turn = (request.get('params') or {}).get('turnId')
+        with self.state_lock:
+            waiters = [self.answers[key] for key, value in self.picker_turns.items()
+                       if value == turn]
+            local = turn in self.local_turns
+        for waiter in waiters:
+            waiter.put({'result': {'answers': {}}})
+        return local or bool(waiters)
+
+    def accept(self, request, args):
+        # Always acknowledge local input as a successful transport operation.
+        # A duplicate command is UI state, not a fatal turn/steer RPC error.
         params = request['params']
         thread = params['threadId']
         queued = request['method'] == 'thread/queue/add'
         steering = request['method'] != 'turn/start'
         turn = (params.get('expectedTurnId') or self.active_turns.get(thread) or str(uuid.uuid4())) if steering else str(uuid.uuid4())
-        self.turn = turn
         value = dict(id=turn, items=[], status='inProgress', error=None)
-        try:
-            if queued:
-                self.send(dict(id=request['id'], result={'queuedSubmission': dict(id=str(uuid.uuid4()),
-                    clientUserMessageId=params['clientUserMessageId'], input=params['input'])}))
-                self.send(dict(method='thread/queue/changed', params=dict(threadId=thread)))
-            else:
-                self.send(dict(id=request['id'], result={'turnId': turn} if steering else {'turn': value}))
-            if not steering:
-                self.send(dict(method='turn/started', params=dict(threadId=thread, turn=value)))
-            else:
-                # Busy TUI input uses turn/steer and keeps a local pending
-                # message until it sees the native userMessage acknowledgement.
-                # The command is consumed here, never by the model.
-                consumed = dict(type='userMessage', id='remory-command-' + uuid.uuid4().hex,
-                                clientId=params.get('clientUserMessageId'), content=params['input'])
-                self.send(dict(method='item/started', params=dict(threadId=thread,
-                    turnId=turn, item=consumed)))
-                self.send(dict(method='item/completed', params=dict(threadId=thread,
-                    turnId=turn, item=consumed)))
-            result = self.pick(thread, turn) if args == ['load'] else self.control.execute(args)
-            item = dict(type='agentMessage', id='remory-status-' + uuid.uuid4().hex, text=result, phase='commentary')
-            self.send(dict(method='item/started', params=dict(threadId=thread, turnId=turn, item=item)))
-            self.send(dict(method='item/agentMessage/delta', params=dict(threadId=thread,
-                turnId=turn, itemId=item['id'], delta=result)))
-            self.send(dict(method='item/completed', params=dict(threadId=thread, turnId=turn, item=item)))
-        except Exception as exc:
-            item = dict(type='agentMessage', id='remory-error-' + uuid.uuid4().hex,
-                        text='REMORY: ' + str(exc), phase='commentary')
+        context = (thread, turn, value, steering)
+        if queued:
+            self.send(dict(id=request['id'], result={'queuedSubmission': dict(id=str(uuid.uuid4()),
+                clientUserMessageId=params['clientUserMessageId'], input=params['input'])}))
+            self.send(dict(method='thread/queue/changed', params=dict(threadId=thread)))
+        else:
+            self.send(dict(id=request['id'], result={'turnId': turn} if steering else {'turn': value}))
+        if not steering:
+            with self.state_lock:
+                self.local_turns.add(turn)
+            self.send(dict(method='turn/started', params=dict(threadId=thread, turn=value)))
+        else:
+            consumed = dict(type='userMessage', id='remory-command-' + uuid.uuid4().hex,
+                            clientId=params.get('clientUserMessageId'), content=params['input'])
+            self.send(dict(method='item/started', params=dict(threadId=thread,
+                turnId=turn, item=consumed)))
+            self.send(dict(method='item/completed', params=dict(threadId=thread,
+                turnId=turn, item=consumed)))
+        if args in (['status'], ['help']):
+            # Read-only commands remain available during checkpoint validation.
+            threading.Thread(target=self.local, args=(context, args), daemon=True).start()
+            return
+        key = tuple(args)
+        with self.state_lock:
+            duplicate, waiting = key in self.pending, bool(self.pending)
+            if not duplicate:
+                self.pending.add(key)
+        if duplicate:
+            self.say(context, 'REMORY: ' + ' '.join(args) +
+                     ' is already in progress; the repeated command was ignored.')
+            self.complete(context)
+            return
+        if waiting:
+            self.say(context, 'REMORY: queued ' + ' '.join(args) +
+                     '; waiting for the current command to finish.')
+        self.jobs.put((context, args))
+
+    def work(self):
+        while not self.closed.is_set():
+            job = self.jobs.get()
+            if job is None or self.closed.is_set():
+                return
+            context, args = job
+            try:
+                self.local(context, args)
+            finally:
+                with self.state_lock:
+                    self.pending.discard(tuple(args))
+
+    def say(self, context, text):
+        if self.closed.is_set():
+            return
+        thread, turn, _, _ = context
+        item = dict(type='agentMessage', id='remory-status-' + uuid.uuid4().hex, text=text, phase='commentary')
+        self.send(dict(method='item/started', params=dict(threadId=thread, turnId=turn, item=item)))
+        self.send(dict(method='item/agentMessage/delta', params=dict(threadId=thread,
+            turnId=turn, itemId=item['id'], delta=text)))
+        self.send(dict(method='item/completed', params=dict(threadId=thread, turnId=turn, item=item)))
+
+    def complete(self, context):
+        thread, turn, value, steering = context
+        if not steering:
+            with self.state_lock:
+                self.local_turns.discard(turn)
             if not self.closed.is_set():
-                self.send(dict(method='item/agentMessage/delta', params=dict(threadId=thread,
-                    turnId=turn, itemId=item['id'], delta=item['text'])))
-                self.send(dict(method='item/completed', params=dict(threadId=thread, turnId=turn, item=item)))
-        finally:
-            if not steering and not self.closed.is_set():
                 value['status'] = 'completed'
                 self.send(dict(method='turn/completed', params=dict(threadId=thread, turn=value)))
-            self.turn = None
-            self.busy.release()
+
+    def local(self, context, args):
+        thread, turn, _, _ = context
+        try:
+            result = self.pick(thread, turn) if args == ['load'] else self.control.execute(args)
+            self.say(context, result)
+        except Exception as exc:
+            self.say(context, 'REMORY: ' + str(exc))
+        finally:
+            self.complete(context)
 
     def pick(self, thread, turn):
         options = self.control.candidates()
@@ -137,7 +191,9 @@ class Connection:
         labels = {x['label'] + ' · ' + x['id'][:8] + (' [current]' if x['current'] else ''): x['id']
                   for i, x in enumerate(options)}
         request_id = 'remory-pick-' + uuid.uuid4().hex
-        waiter = self.answers[request_id] = queue.Queue()
+        with self.state_lock:
+            waiter = self.answers[request_id] = queue.Queue()
+            self.picker_turns[request_id] = turn
         entries = [dict(label=label, description=f"Step {x['step'] if x['step'] is not None else 'base'} · " +
                        (datetime.fromtimestamp(x['created'], timezone.utc).strftime('%m-%d %H:%M UTC') + ' · ' if x.get('created') else '') + x['id'][:12])
                    for label, x in zip(labels, options)]
@@ -151,11 +207,16 @@ class Connection:
             answers = (response.get('result') or {}).get('answers', {}).get('checkpoint', {}).get('answers', [])
             if len(answers) != 1 or answers[0] not in labels:
                 return 'REMORY: checkpoint selection cancelled.'
-            return self.control.select(labels[answers[0]])
         finally:
-            self.answers.pop(request_id, None)
+            with self.state_lock:
+                self.answers.pop(request_id, None)
+                self.picker_turns.pop(request_id, None)
             if not self.closed.is_set():
                 self.send(dict(method='serverRequest/resolved', params=dict(threadId=thread, requestId=request_id)))
+        if self.closed.is_set():
+            return 'REMORY: checkpoint selection cancelled.'
+        self.say((thread, turn, None, True), 'REMORY: verifying the selected checkpoint…')
+        return self.control.select(labels[answers[0]])
 
 
 @contextmanager

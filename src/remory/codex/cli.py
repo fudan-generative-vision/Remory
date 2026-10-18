@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import re
 import secrets
-import signal
 import socket
 import subprocess
 import sys
@@ -19,7 +18,8 @@ import httpx
 
 from .install import ensure_codex
 from .provider import Provider, atomic_json, create_app
-from .sessions import attach_existing, choose_session, sessions_in
+from .sessions import attach_existing, choose_session, resolve_session, sessions_in
+from .terminal import run_terminal
 from .tools import INSTRUCTIONS, require_tools, research_servers, tool_status
 
 
@@ -125,31 +125,6 @@ def serve(provider, token):
         listener.close()
 
 
-def run_terminal(command, workspace, env):
-    child = None
-    previous = {}
-    def terminate(signum, frame):
-        if child is not None and child.poll() is None:
-            child.send_signal(signum)
-        raise KeyboardInterrupt
-    try:
-        previous[signal.SIGINT] = signal.signal(signal.SIGINT, lambda *_: None)
-        for sig in (signal.SIGTERM, signal.SIGHUP):
-            previous[sig] = signal.signal(sig, terminate)
-        child = subprocess.Popen(command, cwd=workspace, env=env)
-        return child.wait()
-    finally:
-        if child is not None and child.poll() is None:
-            child.terminate()
-            try:
-                child.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait(timeout=10)
-        for sig, handler in previous.items():
-            signal.signal(sig, handler)
-
-
 def run(args):
     root = data_root().resolve()
     resuming = args.action == 'resume'
@@ -160,6 +135,8 @@ def run(args):
         name = select_session(root)
         if name is None:
             return 0
+    if resuming:
+        name = resolve_session(root, name)
     name = name or datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-') + secrets.token_hex(3)
     directory = session_path(root, name)
     if resuming:
@@ -294,8 +271,8 @@ def run(args):
                             if args.prompt:
                                 command.append(args.prompt)
                             print('[r-codex] REMORY: \\remory train · \\remory load · \\remory status · \\remory stop', flush=True)
-                            return run_terminal(command, workspace, env)
-                return run_terminal(command, workspace, env)
+                            return run_terminal(command, workspace, env, session=name)
+                return run_terminal(command, workspace, env, session=name)
             finally:
                 manifest.update(status='closed', updated_at=time.time(),
                                 thread_id=provider.meta['root_thread_id'] or manifest.get('thread_id'))
@@ -339,7 +316,7 @@ def main(argv=None):
     parser.add_argument('--train-python', help='Python in the separate training environment')
     parser.add_argument('-C', '--directory', help='Working directory for a new session')
     if action == 'resume':
-        parser.add_argument('session', nargs='?')
+        parser.add_argument('session', nargs='?', help='Saved r-codex session ID or native thread UUID')
         parser.add_argument('--last', action='store_true')
         parser.add_argument('--prompt')
     else:
