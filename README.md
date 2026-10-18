@@ -1,12 +1,20 @@
-# Remory: Learning Residual Memory for Context Compaction
+<h1 align="center">REMORY</h1>
+
+<p align="center"><strong>Learning Residual Memory for Context Compaction</strong></p>
+
+<p align="center">
+  <a href="https://arxiv.org/abs/2610.11287"><img src="https://img.shields.io/badge/arXiv-2610.11287-bb9af7?style=flat-square&amp;logo=arxiv&amp;logoColor=white&amp;labelColor=1a1b26" alt="Paper on arXiv"></a>
+  <a href="https://github.com/fudan-generative-vision/Remory"><img src="https://img.shields.io/badge/GitHub-Code-7aa2f7?style=flat-square&amp;logo=github&amp;logoColor=white&amp;labelColor=1a1b26" alt="Code on GitHub"></a>
+  <a href="#models"><img src="https://img.shields.io/badge/Hugging_Face-Models-e0af68?style=flat-square&amp;logo=huggingface&amp;logoColor=white&amp;labelColor=1a1b26" alt="Models on Hugging Face"></a>
+</p>
+
+<p align="center">
+  <a href="https://huggingface.co/papers/date/2026-10-09"><img src="assets/hf-paper-of-the-day.svg" width="352" alt="Hugging Face Daily Papers — #2 Paper of the day — October 9, 2026"></a>
+</p>
 
 **Remory** supplements an agent's compaction summary with learned soft memory
 from its history. The memory is conditioned on the summary and appended after
 it, helping the frozen model continue its work across compactions.
-
-[📄 **Paper**](https://arxiv.org/pdf/2610.11287) |
-[💻 **Code**](https://github.com/1ring2rta/Remory) |
-[🤗 **Models**](#models)
 
 https://github.com/user-attachments/assets/cd7dd6ad-e4a5-4c89-bbed-043e8e5269fd
 
