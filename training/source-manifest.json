@@ -1,5 +1,5 @@
 {
-  "scope": "Qwen3.8-27B Stage I reconstruction and Stage II offline summary-conditioned continuation",
+  "scope": "Qwen3.8-27B Stage I reconstruction and Stage II offline summary-conditioned continuation; Qwen online session frontier objective",
   "sources": [
     {
       "path": "context_compression/__init__.py",
@@ -250,6 +250,11 @@
       "path": "context_compression/dflash2_LICENSE",
       "source_snapshot": "20261010-qwen38-dflash2-stage2-lr10-shuffle",
       "sha256": "da25818d68a3da676fed16a019beadd6b12f5e4d59ade85840c23a6070240323"
+    },
+    {
+      "path": "context_compression/qwen38_online_objective.py",
+      "source_snapshot": "20261015-session-online-objective",
+      "sha256": "b29e96fb6c06e3c14b927c56f36fcb7779c1124d64b9c9e76e660b4508e911cd"
     }
   ],
   "entrypoints": [

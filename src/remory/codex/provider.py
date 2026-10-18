@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 import hashlib
 import json
+import logging
 from pathlib import Path
 import threading
 import time
@@ -68,12 +69,13 @@ def atomic_json(path, value):
 
 class Provider:
     def __init__(self, url, info, tokenizer, directory, *, session_id,
-                 max_new_tokens=16384, transport=None):
+                 max_new_tokens=16384, transport=None, online_control=None):
         self.url, self.info, self.tokenizer = url.rstrip('/'), info, tokenizer
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.session_id, self.max_new_tokens = session_id, max_new_tokens
         self.transport = transport
+        self.online = online_control
         self.config = info['config']
         self.glm = self.config.get('schema') == 'remory_glm53_local_evaluation_v1'
         self._lock = threading.RLock()
@@ -216,7 +218,8 @@ class Provider:
                 message['content'] = '[Developer instructions from the harness]\n' + message['content']
         return codec, prefix, messages, previous, routes, bool(trigger), tools
 
-    def _compact(self, codec, prefix, messages, previous, tools, client, branches=()):
+    def _compact(self, codec, prefix, messages, previous, tools, client, branches=(), *, online=False,
+                 capture=False):
         if not messages and previous is None:
             raise ValueError('There is no history to compact')
         prefix_ids, history_ids = codec.split(prefix, messages)
@@ -251,11 +254,40 @@ class Provider:
             summary = summary.removesuffix(end).rstrip()
         if not summary.strip():
             raise RuntimeError('Summary is empty; the original context is retained')
+        extra = {}
+        if online and self.online is not None:
+            extra['encoder_version'] = self.online.selection()['id']
+            # Only root text frontiers with a next assistant step are supervised.
+            # Child folding and manual compaction after an answer are excluded.
+            if capture and not branches and messages and messages[-1]['role'] != 'assistant':
+                _, opened = codec.split(prefix, messages, generation=True)
+                if opened[:len(history_ids)] == history_ids and opened[len(history_ids):]:
+                    extra['capture_opening_ids'] = opened[len(history_ids):]
         memory = client.compact(prefix_ids=prefix_ids, history_ids=history_ids,
             summary_ids=codec.summary(summary), previous=previous['handle'] if previous else None,
-            branches=[branch['handle'] for branch in branches])
-        return {'handle': memory['handle'], 'summary': summary.strip(), 'prefix': prefix,
-                'tools_sha256': digest(tools), 'receipt': memory['receipt']}, result
+            branches=[branch['handle'] for branch in branches], **extra)
+        checkpoint = {'handle': memory['handle'], 'summary': summary.strip(), 'prefix': prefix,
+                      'tools_sha256': digest(tools), 'receipt': memory['receipt']}
+        if extra:
+            checkpoint['online'] = dict(encoder_version=extra['encoder_version'], sample_id=memory.get('sample_id'))
+        return checkpoint, result
+
+    def _flush_online(self, thread, state):
+        if self.online is None or not state.get('online_pending'):
+            return
+        pending = list(state['online_pending'])
+        try:
+            with self.client() as client:
+                for item in pending:
+                    self.online.applied(item['encoder_version'])
+                    if item.get('sample_id'):
+                        client.accept_sample(item['sample_id'])
+                    state['online_pending'].remove(item)
+            atomic_json(self._path(thread), state)
+        except (OSError, ValueError, RuntimeError, httpx.HTTPError):
+            # The memory descriptor is already durable. Keep acknowledgements
+            # queued for the next request without invalidating this compaction.
+            logging.getLogger(__name__).exception('Online acknowledgement will be retried')
 
     def handle(self, request, headers=None, *, force_compact=False):
         if not isinstance(request, dict):
@@ -263,6 +295,8 @@ class Provider:
         thread, lock = self._thread(headers or {})
         with lock:
             state = self._load(thread)
+            self._flush_online(thread, state)
+            committed = []
             request_key = digest({'request': request, 'force_compact': force_compact})
             if request_key in state['responses']:
                 return state['responses'][request_key]
@@ -278,14 +312,18 @@ class Provider:
                                 and completion['handle'] not in state.get('folded', [])):
                             branches.append(completion)
                 if branches and not (compact or force_compact):
-                    previous, _ = self._compact(codec, prefix, messages, previous, tools, client, branches)
+                    previous, _ = self._compact(codec, prefix, messages, previous, tools, client, branches,
+                        online=True)
+                    committed.append(previous)
                     previous['instructions'] = request.get('instructions') or 'You are a coding assistant. Use the available tools to complete the user task.'
                     previous['wire_base'] = self._wire_items(request.get('input', []))
                     state['auto_checkpoint'] = previous
                     state.setdefault('folded', []).extend(b['handle'] for b in branches)
                     messages = []
                 if compact or force_compact:
-                    checkpoint, generated = self._compact(codec, prefix, messages, previous, tools, client, branches)
+                    checkpoint, generated = self._compact(codec, prefix, messages, previous, tools, client, branches,
+                        online=thread == self.meta['root_thread_id'], capture=not state['images'])
+                    committed.append(checkpoint)
                     checkpoint['instructions'] = request.get('instructions') or 'You are a coding assistant. Use the available tools to complete the user task.'
                     marker = 'remory.v1.' + checkpoint['handle']
                     state['checkpoints'][marker] = checkpoint
@@ -325,7 +363,9 @@ class Provider:
                           'total_tokens': input_tokens + output_tokens,
                           'input_tokens_details': {'cached_tokens': 0}}}
             state['responses'][request_key] = response
+            state.setdefault('online_pending', []).extend(c['online'] for c in committed if c.get('online'))
             atomic_json(self._path(thread), state)
+            self._flush_online(thread, state)
             with self._lock:
                 self.meta['threads'][thread]['last_activity'] = time.time()
                 if state.get('completion'):

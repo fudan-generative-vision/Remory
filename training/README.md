@@ -6,6 +6,9 @@ their local dependencies, portable configuration helpers, and
 [readable data examples](examples). **Only Qwen3.8-27B training is covered.**
 Both stages freeze Qwen and train only the memory network; there is no target LoRA.
 
+For training from live r-codex sessions with `\remory train` and switching memory
+versions with `\remory load`, see [online training](../integrations/codex/online-training.md).
+
 | | Stage I: reconstruction | Stage II: residual memory |
 | --- | --- | --- |
 | Input | One contiguous 8K–64K token document window | Causal history, history-only handoff summary, and assistant continuation |

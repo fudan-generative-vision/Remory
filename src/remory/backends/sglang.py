@@ -107,8 +107,11 @@ class SGLangBackend:
 
     def encode(self, source, *, start, end, operation, summary=None, input_depth=0, block_depths=()):
         from .sglang_hook import validate_payload
+        from ..online.common import ENCODER_VERSION
         payload = {"mode": "encode", "operation": operation, "start": start, "end": end,
                    "depth": input_depth, "block_depths": list(block_depths), **self._memory(source)}
+        if ENCODER_VERSION.get() is not None:
+            payload["encoder_version"] = ENCODER_VERSION.get()
         if summary is not None:
             payload["summary"] = np.asarray(summary, dtype=np.float32).tolist()
         validate_payload(payload, len(source.input_ids), self.contract.hidden_size,

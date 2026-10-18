@@ -211,9 +211,18 @@ def run(args):
         from ..metadata import resolve_tokenizer
         tokenizer = AutoTokenizer.from_pretrained(resolve_tokenizer(config, model_path))
         limit = info['context_limit']
+        online = None
+        if (getattr(args, 'training_gpus', None) or getattr(args, 'train_python', None)) and not (
+                getattr(args, 'online_training', False) or manifest.get('online_training')):
+            raise ValueError('Enable --online-training before configuring its GPUs or interpreter')
+        if getattr(args, 'online_training', False) or manifest.get('online_training'):
+            from ..online.control import Control
+            online = Control(directory, info, url)
+            online.configure(gpus=getattr(args, 'training_gpus', None),
+                             python=getattr(args, 'train_python', None))
         provider = Provider(url, info, tokenizer, directory / 'provider',
                             session_id=manifest['session_id'],
-                            max_new_tokens=min(16384, limit // 4))
+                            max_new_tokens=min(16384, limit // 4), online_control=online)
         token = secrets.token_hex(32)
         env = environment(directory, token)
         tool_servers = research_servers(directory, tools_venv, env=env) if research_tools else {}
@@ -254,6 +263,7 @@ def run(args):
             manifest.update(identity=info['identity'], model=config['target_model'], url=url,
                             updated_at=time.time(), status='running', pid=os.getpid(),
                             research_tools=research_tools, tools_venv=tools_venv,
+                            online_training=online is not None,
                             codex=str(binary), model_path=model_path)
             atomic_json(directory / 'session.json', manifest)
             atomic_json(root / 'last.json', {'session': name})
@@ -271,10 +281,24 @@ def run(args):
                 command.append(args.prompt)
             print(f'[r-codex] Resume later: r-codex resume {name}', flush=True)
             try:
+                if online is not None:
+                    from .host import host
+                    from .frontend import endpoint
+                    with host(directory, binary, workspace, env,
+                              saved['thread_id'] if resuming else None, 'remory', args.unsafe) as native:
+                        manifest.update(thread_id=native['thread_id'], child_pid=native['child_pid'])
+                        atomic_json(directory / 'session.json', manifest)
+                        with endpoint(directory, native['endpoint'], control=online) as address:
+                            command = [str(binary), 'resume', '--remote', address, native['thread_id'],
+                                       '-C', str(workspace), '--no-alt-screen']
+                            if args.prompt:
+                                command.append(args.prompt)
+                            print('[r-codex] REMORY: \\remory train · \\remory load · \\remory status · \\remory stop', flush=True)
+                            return run_terminal(command, workspace, env)
                 return run_terminal(command, workspace, env)
             finally:
                 manifest.update(status='closed', updated_at=time.time(),
-                                thread_id=provider.meta['root_thread_id'])
+                                thread_id=provider.meta['root_thread_id'] or manifest.get('thread_id'))
                 atomic_json(directory / 'session.json', manifest)
 
 
@@ -309,6 +333,10 @@ def main(argv=None):
                         help='Enable Serper search, Docling, and MinerU (requires tool packages and API keys)')
     parser.add_argument('--tools-venv', help='Separate document-tool venv (or REMORY_TOOLS_VENV)')
     parser.add_argument('--unsafe', action='store_true', help='Disable native approvals and sandbox')
+    parser.add_argument('--online-training', action='store_true',
+                        help='Collect accepted Qwen compactions and enable local REMORY training commands')
+    parser.add_argument('--training-gpus', help='Reserved physical GPU indices/UUIDs (for example 2,3)')
+    parser.add_argument('--train-python', help='Python in the separate training environment')
     parser.add_argument('-C', '--directory', help='Working directory for a new session')
     if action == 'resume':
         parser.add_argument('session', nargs='?')
@@ -322,6 +350,8 @@ def main(argv=None):
     args.action = action
     if args.last and args.session:
         parser.error('Choose a session name or --last, not both')
+    if action == 'new' and (args.training_gpus or args.train_python) and not args.online_training:
+        parser.error('--training-gpus and --train-python require --online-training')
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         parser.error('Run r-codex in an interactive terminal')
     try:

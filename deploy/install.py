@@ -95,7 +95,7 @@ def install(state, build):
          f"torchaudio==2.11.0+{build}", "--index-url", f"https://download.pytorch.org/whl/{build}"], env=env)
     run([*pip, "--index-url", "https://pypi.org/simple", "-c", ROOT / "deploy/constraints.txt",
          "-e", source / "python", KERNEL130,
-         "-e", str(ROOT) + "[server,transformers]", "dill==0.4.1"], env=env)
+         "-e", str(ROOT) + "[server,transformers,codex]", "dill==0.4.1"], env=env)
     cuda = install_toolchain(state, build)
     prepare_headers(python, cuda, build)
     marker.write_text(json.dumps({"fingerprint": fingerprint, "sglang": recipe["commit"],

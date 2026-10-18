@@ -23,12 +23,20 @@ class Client:
         response.raise_for_status()
         return response.json()
 
-    def compact(self, *, prefix_ids, history_ids, summary_ids, previous=None, branches=()):
+    def compact(self, *, prefix_ids, history_ids, summary_ids, previous=None, branches=(),
+                encoder_version=None, capture_opening_ids=None):
         body = dict(prefix_ids=list(prefix_ids), history_ids=list(history_ids),
                     summary_ids=list(summary_ids), previous=previous)
         if branches:
             body["branches"] = list(branches)
+        if encoder_version is not None:
+            body["encoder_version"] = encoder_version
+        if capture_opening_ids is not None:
+            body["capture_opening_ids"] = list(capture_opening_ids)
         return self._post("v1/compact", body)
+
+    def accept_sample(self, ident):
+        return self._post("v1/remory/samples/" + ident + "/accept", {})
 
     def generate(self, *, max_new_tokens=1024, handle=None, input_ids=None,
                  continuation_ids=(), sampling=None):

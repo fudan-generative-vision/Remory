@@ -11,3 +11,4 @@ accelerate==1.14.0
 safetensors==0.8.0
 einops==0.8.2
 pytest==8.4.2
+httpx>=0.27,<1

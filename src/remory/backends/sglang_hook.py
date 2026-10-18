@@ -6,6 +6,7 @@ cache, and no CUDA graphs. Ordinary autoregressive KV caching remains enabled.
 from __future__ import annotations
 
 import json
+import os
 from functools import wraps
 import numpy as np
 import torch
@@ -47,8 +48,11 @@ def validate_payload(payload, tokens, width, *, block=1024, max_depth=8):
             raise ValueError("unsupported recovery fields")
         return
     if set(payload) - {"mode", "operation", "start", "end", "summary", "depth",
-                       "block_depths", "positions", "memory"}:
+                       "block_depths", "positions", "memory", "encoder_version"}:
         raise ValueError("unsupported encode fields")
+    if "encoder_version" in payload:
+        from ..online.common import version_id
+        version_id(payload["encoder_version"])
     op, start, end = (payload.get(k) for k in ("operation", "start", "end"))
     if op not in {"summary", "leaves", "recursive_leaves", "parent"}:
         raise ValueError("invalid encode operation")
@@ -87,6 +91,8 @@ class ResidualHook:
         self.compressor = None
         self.payload = None
         self.captured = {}
+        self.encoder_root = os.environ.get("REMORY_ENCODER_DIRECTORY")
+        self.active_version = None
 
     def setup_model(self, model):
         from ..models.load import load_compressor
@@ -94,6 +100,11 @@ class ResidualHook:
         embedding = self.backbone.embed_tokens.weight
         self.compressor, config = load_compressor(
             self.checkpoint, device=embedding.device, dtype=embedding.dtype)
+        self.base_config = config
+        if self.encoder_root:
+            from ..online.common import checkpoint
+            self.base_version = checkpoint(self.checkpoint)["id"]
+            self.active_version = self.base_version
         self.width = config["compressor"]["target_hidden_size"]
         self.block = config["residual"]["block_tokens"]
         self.ratio = config["residual"]["compression_ratio"]
@@ -138,7 +149,32 @@ class ResidualHook:
                          max_depth=self.compressor.max_depth)
         if payload["mode"] == "encode" and not batch.is_prefill_only:
             raise RuntimeError("encoding must be a prefill-only request")
+        if payload["mode"] == "encode":
+            self.select_encoder(payload.get("encoder_version"))
         self.payload = payload
+
+    def select_encoder(self, version):
+        if not self.encoder_root:
+            if version is not None:
+                raise ValueError("Online checkpoint loading is disabled")
+            return
+        version = version or self.base_version
+        if version == self.active_version:
+            return
+        from pathlib import Path
+        from safetensors.torch import load_file
+        from ..online.common import resolve_version
+        selected = resolve_version(self.encoder_root, self.checkpoint, version, verify=True)
+        # Keep one encoder on the GPU. Generation only scatters saved memory;
+        # an encoder is selected independently for every complete encode request.
+        weights = load_file(str(Path(selected["path"]) / "model.safetensors"), device="cpu")
+        current = self.compressor.state_dict()
+        if (set(weights) != set(current)
+            or any(weights[k].shape != current[k].shape or not torch.isfinite(weights[k]).all()
+                   for k in weights)):
+            raise ValueError("Invalid checkpoint tensor names, shapes, or values")
+        self.compressor.load_state_dict(weights, strict=True)
+        self.active_version = version
 
     def end(self, module, args, output):
         self.payload, self.captured = None, {}

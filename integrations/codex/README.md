@@ -65,6 +65,18 @@ state (`fork_context=false`). With Qwen, a completed
 child's summary and residual memory join the parent's next compaction; each
 completed checkpoint is folded once. The default allows three direct children.
 
+## Online training commands
+
+With [online training enabled](online-training.md), enter `\remory train` in the
+r-codex input box to train REMORY from accepted compactions in ongoing Qwen
+sessions. `\remory load` opens a checkpoint picker; the selected version applies
+at the next successful compaction. `\remory status` shows progress and
+`\remory stop` saves and stops the shared trainer. These commands are handled
+locally, including while the agent is busy, and are never sent to the model.
+
+Qwen stays frozen. Training needs a separate environment and explicitly reserved
+GPUs. See the [setup, commands and sample rules](online-training.md).
+
 ## Research tools and API keys
 
 To use the search and document tools from the research demo, install the

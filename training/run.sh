@@ -2,7 +2,7 @@
 set -euo pipefail
 training_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 training_python=${TRAIN_PYTHON:-python}
-export PYTHONPATH="$training_dir${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$training_dir:$training_dir/../src${PYTHONPATH:+:$PYTHONPATH}"
 export TOKENIZERS_PARALLELISM=${TOKENIZERS_PARALLELISM:-false}
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
 command=${1:-help}

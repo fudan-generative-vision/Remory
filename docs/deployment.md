@@ -48,14 +48,18 @@ For this release, update the clone and install the new CLI in a fresh runtime:
 
 ```bash
 git pull --ff-only
-python deploy/install.py --runtime-dir .remory-v0.3
-source .remory-v0.3/venv/bin/activate
+python deploy/install.py --runtime-dir .remory-v0.4
+source .remory-v0.4/venv/bin/activate
 python -m remory.launch_server --tp 2
 ```
 
 Activate the same environment in the client terminal before running `r-codex`.
-Start a new session after changing memory weights; keep the old runtime and
+Start a new session after changing the server's base checkpoint; keep the old runtime and
 database if you need to return to sessions created with the previous checkpoint.
+When the actor and base checkpoint are unchanged, pass `--store` pointing to
+the existing `memory.sqlite` to keep its saved sessions available after the
+runtime upgrade. The [online training guide](../integrations/codex/online-training.md)
+describes enabling `\remory train` and `\remory load`.
 
 ## Launch
 
@@ -140,6 +144,7 @@ python -m remory.launch_server \
 | `--port` | `8421` | API port |
 | `--store` | `<runtime-dir>/memory.sqlite` | Session database |
 | `--runtime-dir` | Detected from the environment | Installed CUDA paths, kernel cache, and session data |
+| `--online-training-dir` | Disabled | Qwen online sample pool and encoder checkpoint versions; shared with r-codex |
 
 Requests that exceed the context limit return an error. Reduce `--context-length`
 if the model runs out of GPU memory. Run `python -m remory.launch_server --help`

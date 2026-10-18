@@ -16,6 +16,16 @@
 from its history. The memory is conditioned on the summary and appended after
 it, helping the frozen model continue its work across compactions.
 
+## News
+
+- **2026-10-18** — **Online training in r-codex:** `\remory train` learns from
+  ongoing Qwen sessions; `\remory load` opens the memory-checkpoint picker.
+  Use `\remory status` to follow progress and `\remory stop` to save and stop.
+  Qwen stays frozen; selected memory weights apply at the next successful
+  compaction. [Setup and commands](integrations/codex/online-training.md).
+- **2026-10-09** — REMORY ranked **#2 Paper of the day** on
+  [Hugging Face Daily Papers](https://huggingface.co/papers/date/2026-10-09).
+
 https://github.com/user-attachments/assets/cd7dd6ad-e4a5-4c89-bbed-043e8e5269fd
 
 <sub>Music: <a href="https://www.scottbuckley.com.au/library/electric-dreams/">Electric Dreams</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="assets/README.md#demo">Credits &amp; edit details</a></sub>
