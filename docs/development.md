@@ -45,6 +45,15 @@ recursion, and storage; the backend supplies encoding and embedding-aware genera
 
 ## Tested setup
 
+The 2026-10-18 slash-command update passed 96 runtime tests. Native Codex 0.149.0
+checks with fixture inference covered `/remory` and its backslash alias, text
+and Enter arriving together, bracketed and multiline pastes, the native
+permissions menu, Unicode input, terminal resizing, and the exit/resume hint.
+Enter handles a local command during model generation; Tab retains native
+queueing and handles the command locally when that turn completes. Local
+commands did not reach the fixture model. The existing checkpoint-picker and
+command-queue checks also passed.
+
 The 2026-10-18 r-codex follow-up fixes passed all 89 runtime tests. Native Codex
 0.149.0 terminal checks with fixture inference covered Unicode input, window
 resizing, the r-codex exit hint, and UUID resumption into the same saved session.

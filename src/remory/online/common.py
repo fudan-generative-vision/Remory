@@ -83,7 +83,7 @@ def resolve_version(root, base, ident, *, verify=False):
     root = Path(root).resolve()
     item = read(root / 'versions' / (ident + '.json'))
     if not item:
-        raise ValueError('Unknown REMORY checkpoint; select it with \\remory load')
+        raise ValueError('Unknown REMORY checkpoint; select it with /remory load')
     path = Path(item['path']).resolve()
     if not path.is_relative_to(root / 'checkpoints') or path.parent.name.startswith('.'):
         raise ValueError('Checkpoint is outside the online training directory')

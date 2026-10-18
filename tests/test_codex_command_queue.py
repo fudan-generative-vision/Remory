@@ -72,13 +72,14 @@ def has_text(events, text):
     return any(text in e.get('params', {}).get('delta', '') for e in events)
 
 
+@pytest.mark.parametrize('prefix', ['/', '\\'])
 @pytest.mark.parametrize('method', ['turn/start', 'turn/steer', 'thread/queue/add'])
-def test_busy_load_acknowledges_duplicates_queues_mutations_and_keeps_status_live(tmp_path, method):
+def test_busy_load_acknowledges_duplicates_queues_mutations_and_keeps_status_live(tmp_path, method, prefix):
     control = Controls()
     with connection(tmp_path, control) as (ws, seen):
         events = []
         try:
-            send(ws, 1, '\\remory load', method)
+            send(ws, 1, prefix + 'remory load', method)
             until(ws, events, lambda es: any(e.get('method') == 'item/tool/requestUserInput' for e in es))
             picker = next(e for e in events if e.get('method') == 'item/tool/requestUserInput')
             options = picker['params']['questions'][0]['options']
@@ -89,9 +90,9 @@ def test_busy_load_acknowledges_duplicates_queues_mutations_and_keeps_status_liv
             until(ws, events, lambda es: has_text(es, 'verifying the selected checkpoint'))
             assert any(e.get('method') == 'serverRequest/resolved' for e in events)
             send(ws, 2, '\\remory load', method)
-            send(ws, 3, '\\remory status', method)
-            send(ws, 4, '\\remory stop', method)
-            send(ws, 5, '\\remory train', method)
+            send(ws, 3, prefix + 'remory status', method)
+            send(ws, 4, prefix + 'remory stop', method)
+            send(ws, 5, prefix + 'remory train', method)
             send(ws, 6, 'ordinary user message', method)
             until(ws, events, lambda es: has_text(es, 'repeated command was ignored')
                   and has_text(es, 'executed status') and has_text(es, 'queued stop')

@@ -16,7 +16,7 @@ def command(params):
             or items[0].get('type') != 'text'):
         return None
     text = items[0].get('text', '').strip()
-    if not re.match(r'^\\remory(?:\s|$)', text):
+    if not re.match(r'^[\\/]remory(?:\s|$)', text):
         return None
     return text.split()[1:] or ['help']
 
@@ -136,7 +136,7 @@ class Control:
             write_json(self.pool / 'worker.json', dict(pid=child.pid,
                 start=Path(f'/proc/{child.pid}/stat').read_text().rsplit(')', 1)[1].split()[19]))
         return ('REMORY: background trainer started. It waits for complete samples and the configured '
-                'GPUs. Use \\remory status for progress, \\remory load for checkpoints.')
+                'GPUs. Use /remory status for progress, /remory load for checkpoints.')
 
     def status(self):
         state = read(self.pool / 'status.json', {})
@@ -144,7 +144,7 @@ class Control:
         pending = read(self.root / 'pending-load.json')
         phase = state.get('phase', 'not started')
         if phase not in {'not started', 'stopped', 'failed'} and not alive(read(self.pool / 'worker.json', {})):
-            phase = 'interrupted (run \\remory train to resume)'
+            phase = 'interrupted (run /remory train to resume)'
         return (f"REMORY: {phase}; step {state.get('step', 0)}; samples {state.get('samples', 0)}; "
                 f"active {active['label']}" + (f"; pending {pending['label']}" if pending else '') +
                 (f"\n{state['detail']}" if state.get('detail') else ''))
@@ -157,4 +157,4 @@ class Control:
     def execute(self, args):
         if len(args) == 1 and args[0] in {'train', 'status', 'stop'}:
             return getattr(self, args[0])()
-        return 'REMORY commands: \\remory train | \\remory load | \\remory status | \\remory stop'
+        return 'REMORY commands: /remory train | /remory load | /remory status | /remory stop'

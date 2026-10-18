@@ -3,24 +3,28 @@
 Train REMORY from ongoing **Qwen3.8-27B** sessions, then select a memory checkpoint
 without leaving the Codex terminal. Qwen stays frozen; only REMORY is updated.
 
-Enter these commands directly in the **r-codex input box**. The leading character
-is a backslash (`\`), not the slash used by Codex's `/compact` command.
+Enter these commands directly in the **r-codex input box**, then press Enter.
+The earlier backslash form (for example, `\remory train`) remains supported.
 
 | Command | Action |
 | --- | --- |
-| `\remory train` | Start or resume the shared background trainer. Wait for accepted samples and available training GPUs. |
-| `\remory load` | Open the checkpoint picker. Use arrow keys and Enter to select; Cancel keeps the current version. |
-| `\remory status` | Show the training phase, step, sample count, and this session's active/pending checkpoint. |
-| `\remory stop` | Stop the shared trainer after its current step and save progress. Sample collection continues. |
+| `/remory train` | Start or resume the shared background trainer. Wait for accepted samples and available training GPUs. |
+| `/remory load` | Open the checkpoint picker. Use arrow keys and Enter to select; Cancel keeps the current version. |
+| `/remory status` | Show the training phase, step, sample count, and this session's active/pending checkpoint. |
+| `/remory stop` | Stop the shared trainer after its current step and save progress. Sample collection continues. |
 
-These are local commands, intercepted before model input. They also work while
-the agent is busy. Selecting a checkpoint takes effect at the **next successful
-compaction** in this session. Existing memory tensors remain unchanged, and
+Only standalone commands are handled locally, before model input. Quoted commands,
+commands mentioned in prose, and messages with attachments remain normal input.
+Native Codex commands such as `/compact` and `/permissions` keep their usual behavior.
+
+REMORY commands also work while the agent is busy: press Enter to handle one
+immediately, or Tab to keep Codex's normal queued-input behavior. Selecting a
+checkpoint takes effect at the **next successful compaction** in this session. Existing memory tensors remain unchanged, and
 other sessions retain their encoder versions. The picker includes the released
 checkpoint so you can switch back.
 
 After selection, the picker closes and reports checkpoint verification in the
-transcript. `\remory status` and `\remory help` remain available during that work.
+transcript. `/remory status` and `/remory help` remain available during that work.
 Other load/train/stop commands run in submission order; repeating a pending
 command reports that it is already in progress instead of submitting it twice.
 Choose Cancel or press Esc while the picker is open to keep the current version.
@@ -92,13 +96,13 @@ To enable it for an existing saved session, use
 Then, inside the r-codex input box:
 
 ```text
-\remory train
-\remory status
-\remory load
+/remory train
+/remory status
+/remory load
 ```
 
-Training does not start just by launching the CLI. `\remory train` starts it;
-the worker can continue after the terminal closes. Run `\remory stop` from any
+Training does not start just by launching the CLI. `/remory train` starts it;
+the worker can continue after the terminal closes. Run `/remory stop` from any
 enabled session to stop that pool's trainer. It finishes an in-flight teacher
 request or training step before stopping, so stopping is not immediate.
 
@@ -139,7 +143,7 @@ All pool state lives in the directory passed to `--online-training-dir`:
 
 Stop the worker before editing `config.json`. Increasing `min_free_mib` makes it
 wait for more available memory. `waiting_for_samples` and `waiting_for_gpu` are
-normal idle states. A failed worker can be restarted with `\remory train`; check
+normal idle states. A failed worker can be restarted with `/remory train`; check
 `worker.log` for the underlying error first.
 
 Captured history and checkpoints stay on your filesystem. They can contain

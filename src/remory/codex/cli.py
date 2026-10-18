@@ -270,8 +270,8 @@ def run(args):
                                        '-C', str(workspace), '--no-alt-screen']
                             if args.prompt:
                                 command.append(args.prompt)
-                            print('[r-codex] REMORY: \\remory train · \\remory load · \\remory status · \\remory stop', flush=True)
-                            return run_terminal(command, workspace, env, session=name)
+                            print('[r-codex] REMORY: /remory train · /remory load · /remory status · /remory stop', flush=True)
+                            return run_terminal(command, workspace, env, session=name, local_commands=True)
                 return run_terminal(command, workspace, env, session=name)
             finally:
                 manifest.update(status='closed', updated_at=time.time(),

@@ -18,9 +18,9 @@ it, helping the frozen model continue its work across compactions.
 
 ## News
 
-- **2026-10-18** — **Online training in r-codex:** `\remory train` learns from
-  ongoing Qwen sessions; `\remory load` opens the memory-checkpoint picker.
-  Use `\remory status` to follow progress and `\remory stop` to save and stop.
+- **2026-10-18** — **Online training in r-codex:** `/remory train` learns from
+  ongoing Qwen sessions; `/remory load` opens the memory-checkpoint picker.
+  Use `/remory status` to follow progress and `/remory stop` to save and stop.
   Qwen stays frozen; selected memory weights apply at the next successful
   compaction. [Setup and commands](integrations/codex/online-training.md).
 - **2026-10-09** — REMORY ranked **#2 Paper of the day** on

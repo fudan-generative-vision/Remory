@@ -213,7 +213,7 @@ def main(run):
     stopped = stopped or stop or (root / 'STOP').exists()
     if rank == 0 and not stopped:
         write_json(run / 'completed.json', dict(step=step, completed_at=time.time()))
-    status(phase='stopped' if stopped else 'completed', detail='Use \\remory load to choose a checkpoint.')
+    status(phase='stopped' if stopped else 'completed', detail='Use /remory load to choose a checkpoint.')
     dist.destroy_process_group()
     if lease:
         lease.close()

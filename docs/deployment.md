@@ -59,7 +59,7 @@ database if you need to return to sessions created with the previous checkpoint.
 When the actor and base checkpoint are unchanged, pass `--store` pointing to
 the existing `memory.sqlite` to keep its saved sessions available after the
 runtime upgrade. The [online training guide](../integrations/codex/online-training.md)
-describes enabling `\remory train` and `\remory load`.
+describes enabling `/remory train` and `/remory load`.
 
 ## Launch
 

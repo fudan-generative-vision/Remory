@@ -10,7 +10,10 @@ import signal
 import subprocess
 import sys
 import termios
-import threading
+import time
+import tty
+
+from .terminal_commands import CommandScreen, InputPackets
 
 
 class ResumeHint:
@@ -64,18 +67,16 @@ class ResumeHint:
         return self.line(value)
 
 
-def run_terminal(argv, workspace, env, *, session):
-    """Relay output only; stdin and foreground signals still belong to Codex.
-
-    An output PTY preserves native terminal detection and image rendering.
-    Keyboard input is never piped, interpreted or re-encoded by this wrapper.
-    """
+def run_terminal(argv, workspace, env, *, session, local_commands=False):
+    """Keep native rendering and dispatch local /remory commands through its RPC."""
     output = sys.stdout.fileno()
     source = sys.stdin.fileno()
     master, slave = os.openpty()
     hint = ResumeHint(session)
-    child = relay = None
-    stopped = threading.Event()
+    child = None
+    packets = InputPackets()
+    size = os.get_terminal_size(output)
+    display = CommandScreen(size.columns, size.lines) if local_commands else None
     previous = {}
     saved_tty = termios.tcgetattr(source) if os.isatty(source) else None
 
@@ -83,6 +84,9 @@ def run_terminal(argv, workspace, env, *, session):
         if os.isatty(output):
             size = fcntl.ioctl(output, termios.TIOCGWINSZ, b'\0'*8)
             fcntl.ioctl(master, termios.TIOCSWINSZ, size)
+            dimensions = os.get_terminal_size(output)
+            if display is not None:
+                display.resize(dimensions.columns, dimensions.lines)
         if child is not None and child.poll() is None:
             child.send_signal(signal.SIGWINCH)
 
@@ -92,27 +96,30 @@ def run_terminal(argv, workspace, env, *, session):
 
     def copy_output():
         try:
-            while True:
-                ready, _, _ = select.select([master], [], [], .1)
-                if not ready:
-                    if stopped.is_set():
-                        break
-                    continue
-                try:
-                    data = os.read(master, 65536)
-                except OSError as error:
-                    if error.errno == errno.EIO:
-                        break
-                    raise
-                if not data:
-                    break
-                write(hint.feed(data))
-            write(hint.finish())
-        except OSError:
-            # The real terminal disappeared; preserve the normal launcher
-            # cleanup path instead of leaving an interactive child orphaned.
-            if child is not None and child.poll() is None:
-                child.terminate()
+            data = os.read(master, 65536)
+        except OSError as error:
+            if error.errno == errno.EIO:
+                return False
+            raise
+        if not data:
+            return False
+        if display is not None:
+            display.feed(data)
+        write(hint.feed(data))
+        return True
+
+    def send(data):
+        while data:
+            data = data[os.write(master, data):]
+
+    def refresh_composer():
+        # A paste and Enter can arrive in one read. Let the native renderer
+        # consume that text before examining its composer, including paste bursts.
+        until = time.monotonic() + .12
+        while time.monotonic() < until:
+            ready, _, _ = select.select([master], [], [], max(0, until-time.monotonic()))
+            if ready and not copy_output():
+                break
 
     def terminate(signum, _):
         if child is not None and child.poll() is None:
@@ -120,20 +127,39 @@ def run_terminal(argv, workspace, env, *, session):
         raise KeyboardInterrupt
 
     try:
-        # Avoid translating LF twice when relaying between terminal devices.
-        attributes = termios.tcgetattr(slave)
-        attributes[1] &= ~termios.OPOST
-        termios.tcsetattr(slave, termios.TCSANOW, attributes)
+        # The outer terminal is raw while relaying, so keep the slave's normal
+        # newline translation for output after Codex restores its terminal mode.
         resize()
         previous[signal.SIGINT] = signal.signal(signal.SIGINT, lambda *_: None)
         for signum in (signal.SIGTERM, signal.SIGHUP):
             previous[signum] = signal.signal(signum, terminate)
         previous[signal.SIGWINCH] = signal.signal(signal.SIGWINCH, resize)
-        child = subprocess.Popen(argv, cwd=workspace, env=env, stdout=slave, stderr=slave)
+        tty.setraw(source)
+        child = subprocess.Popen(argv, cwd=workspace, env=env,
+                                 stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
         os.close(slave)
         slave = None
-        relay = threading.Thread(target=copy_output, daemon=True)
-        relay.start()
+        while True:
+            ready, _, _ = select.select([master, source], [], [], .05)
+            if master in ready and not copy_output():
+                break
+            if source in ready:
+                data = os.read(source, 65536)
+                if not data:
+                    break
+                if display is None:
+                    send(data)
+                    continue
+                for submit, packet in packets.feed(data):
+                    if submit and display is not None:
+                        refresh_composer()
+                        packet = display.submission(packet)
+                    send(packet)
+            elif packets.pending:
+                send(packets.flush_escape())
+            if child.poll() is not None and not ready:
+                break
+        write(hint.finish())
         return child.wait()
     finally:
         if child is not None and child.poll() is None:
@@ -143,9 +169,6 @@ def run_terminal(argv, workspace, env, *, session):
             except subprocess.TimeoutExpired:
                 child.kill()
                 child.wait(timeout=5)
-        stopped.set()
-        if relay:
-            relay.join(timeout=2)
         if saved_tty is not None:
             with suppress(OSError, termios.error):
                 termios.tcsetattr(source, termios.TCSADRAIN, saved_tty)

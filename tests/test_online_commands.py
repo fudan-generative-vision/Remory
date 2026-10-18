@@ -15,12 +15,17 @@ class CommandsTest(unittest.TestCase):
     def test_only_standalone_text_is_a_command(self):
         def parse(text, *rest):
             return control.command({'input': [{'type': 'text', 'text': text}, *rest]})
-        self.assertEqual(parse('\\remory train'), ['train'])
-        self.assertEqual(parse('\\remory load'), ['load'])
-        self.assertIsNone(parse('Please explain \\remory train'))
-        self.assertIsNone(parse('`\\remory train`'))
-        self.assertIsNone(parse('\\remory train', {'type': 'image', 'imageUrl': 'data:...'}))
-        self.assertIsNone(parse('\\remoryx train'))
+        for prefix in ('/', '\\'):
+            self.assertEqual(parse(prefix + 'remory train'), ['train'])
+            self.assertEqual(parse(prefix + 'remory load'), ['load'])
+            self.assertEqual(parse(' ' + prefix + 'remory status '), ['status'])
+            self.assertEqual(parse(prefix + 'remory'), ['help'])
+            self.assertIsNone(parse('Please explain ' + prefix + 'remory train'))
+            self.assertIsNone(parse('`' + prefix + 'remory train`'))
+            self.assertIsNone(parse(prefix + 'remory train', {'type': 'image', 'imageUrl': 'data:...'}))
+            self.assertIsNone(parse(prefix + 'remoryx train'))
+        self.assertIsNone(control.command({'input': [None]}))
+        self.assertIsNone(parse('/compact'))
 
     def test_native_transport_picker_and_input_isolation(self):
         seen, selected = [], []
@@ -46,7 +51,7 @@ class CommandsTest(unittest.TestCase):
                 with endpoint(Path(tmp) / 'session', 'unix://' + str(path), control=Stub()) as address:
                     with unix_connect(address.removeprefix('unix://'), compression=None) as ws:
                         ws.send(json.dumps(dict(id=1, method='turn/start', params=dict(threadId='thread',
-                            input=[{'type': 'text', 'text': '\\remory load'}]))))
+                            input=[{'type': 'text', 'text': '/remory load'}]))))
                         notifications = []
                         while True:
                             msg = json.loads(ws.recv(timeout=5))
