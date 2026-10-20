@@ -20,7 +20,7 @@ it, helping the frozen model continue its work across compactions.
 
 - **2026-10-20** — **77 hours of sustained AI research:** From an idea through
   experiments and manuscript revisions.
-  With REMORY, a small open model can be your **strong research co-worker**.
+  With REMORY, a small open model can be your **sound research co-worker**.
 
   https://github.com/user-attachments/assets/a69eb0ed-e65a-442d-a92a-49945f019473
 
