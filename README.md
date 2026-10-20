@@ -18,9 +18,8 @@ it, helping the frozen model continue its work across compactions.
 
 ## News
 
-- **2026-10-20** — **77 hours of sustained AI research:** our
-  **Qwen3.8-27B + REMORY-1.9B** agent took Oracle from an idea through
-  experiments and manuscript revisions, with human oversight.
+- **2026-10-20** — **77 hours of sustained AI research:** From an idea through
+  experiments and manuscript revisions.
   With REMORY, a small open model can be your **strong research co-worker**.
 
   https://github.com/user-attachments/assets/94aa6ddd-8451-4813-bba9-d93460b2f395
