@@ -18,6 +18,20 @@ it, helping the frozen model continue its work across compactions.
 
 ## News
 
+- **2026-10-20** — **Auto Research in 48 seconds:** watch
+  **Qwen3.8-27B + REMORY-1.9B** take Oracle from an idea through multi-day
+  experiments and manuscript revisions, with human oversight, then zoom out
+  to **16 research and ASI-Bench sessions**.
+
+  <details>
+  <summary>Watch the Auto Research demo</summary>
+
+  https://github.com/user-attachments/assets/94aa6ddd-8451-4813-bba9-d93460b2f395
+
+  <sub>Music: <a href="https://www.scottbuckley.com.au/library/origami/">Origami</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="assets/README.md#auto-research-demo">Credits &amp; replay details</a></sub>
+
+  </details>
+
 - **2026-10-18** — **Online training in r-codex:** `/remory train` learns from
   ongoing Qwen sessions; `/remory load` opens the memory-checkpoint picker.
   Use `/remory status` to follow progress and `/remory stop` to save and stop.

@@ -16,6 +16,29 @@ on October 18, 2026.
 
 Source: [Remory preprint](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B/tree/main/paper).
 
+## Auto Research demo
+
+The 48-second video replays **Qwen3.8-27B + REMORY-1.9B** working on Oracle
+across October 13–16, 2026: literature, implementation, training, sub-agents,
+diagnosis, review, experiments, evaluation, and manuscript revisions. The first
+36 seconds compress the recorded research into a continuous workflow. Five
+human directions are edited for clarity and identified on screen; this is
+research with human oversight. Elapsed session time includes waiting and does
+not represent continuous inference.
+
+The video then zooms out to a 4×4 montage: Oracle in the upper-left cell,
+Flow Drafter, and 14 ASI-Bench scientific tasks. These are edited replays of
+separate session timelines; the grid does not imply simultaneous execution or
+benchmark success. The research assistant is distinct from the experimental
+models. Manuscript and result snapshots reflect the recorded work, not an
+independently validated paper or a controlled comparison across protocols.
+
+Music: [Origami](https://www.scottbuckley.com.au/library/origami/)
+by [Scott Buckley](https://www.scottbuckley.com.au), released under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+The 48-second excerpt retains the original tempo and is trimmed, faded, and
+level-adjusted.
+
 ## Demo
 
 The 93.5-second video opens with **REMORY**, the paper title, and a rotating
