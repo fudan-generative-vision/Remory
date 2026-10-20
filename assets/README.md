@@ -18,8 +18,8 @@ Source: [Remory preprint](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B/
 
 ## Auto Research demo
 
-The 48-second video replays **Qwen3.8-27B + REMORY-1.9B** working on Oracle
-across October 13–16, 2026: literature, implementation, training, sub-agents,
+The 48-second `remory-co-worker.mp4` replays **Qwen3.8-27B + REMORY-1.9B**
+working on Oracle across October 13–16, 2026: literature, implementation, training, sub-agents,
 diagnosis, review, experiments, evaluation, and manuscript revisions. The first
 36 seconds compress the recorded research into a continuous workflow. Five
 human directions are edited for clarity and identified on screen; this is
@@ -41,7 +41,7 @@ level-adjusted.
 
 ## Demo
 
-The 93.5-second video opens with **REMORY**, the paper title, and a rotating
+The 55.6-second `remory.mp4` opens with **REMORY**, the paper title, and a rotating
 anatomical brain illustration. It then uses the paper's method diagram and
 recorded Qwen and GLM task traces, moving
 from a paired Core War replay to nine tasks in a 3×3 grid,
@@ -65,23 +65,13 @@ presentation.
 The singer-search panel shows a recorded 30-frame contact sheet used to inspect
 candidate footage. That footage does not depict the singer ultimately identified.
 
-The research segment, titled **Fully Automatic Research**, shows
-**Qwen3.8-27B + REMORY-1.9B** exploring flow-matching drafters with DFlash as a
-reference. It replays a 34-hour session through literature searches, code edits,
-experiments, audits, and revisions to a 14-page working paper. A step rail follows
-the recorded work, and branching panels replay eight actual `spawn_agent` calls:
-seven returned reports and one child was stopped while running. Each branching
-panel labels its own condensed event span.
-
-The workflow includes a human-defined goal, assisted setup, and occasional
-feedback. The snapshot is from October 13, 2026, at 15:38 UTC; research is ongoing,
-the paper is a draft, and evaluation and correctness checks remain open. Session
-time includes waiting and service restarts, rather than continuous inference.
+The 3×3 grid transitions directly to the Terminal-Bench and BrowseComp results,
+followed by the paper, code, and model links.
 
 Music: [Electric Dreams](https://www.scottbuckley.com.au/library/electric-dreams/)
 by [Scott Buckley](https://www.scottbuckley.com.au), released under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-The excerpt is trimmed to 93.50 seconds, faded in and out, and level-adjusted.
+The excerpt is trimmed to 55.60 seconds, faded in and out, and level-adjusted.
 
 Brain illustration and animation: adapted from the
 [Harvard–Oxford atlas distributed by FSL](https://fsl.fmrib.ox.ac.uk/fsl/docs/other/datasets.html).

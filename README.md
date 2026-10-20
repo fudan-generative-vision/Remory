@@ -22,7 +22,7 @@ it, helping the frozen model continue its work across compactions.
   experiments and manuscript revisions.
   With REMORY, a small open model can be your **strong research co-worker**.
 
-  https://github.com/user-attachments/assets/94aa6ddd-8451-4813-bba9-d93460b2f395
+  https://github.com/user-attachments/assets/a69eb0ed-e65a-442d-a92a-49945f019473
 
   <sub>Music: <a href="https://www.scottbuckley.com.au/library/origami/">Origami</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="assets/README.md#auto-research-demo">Credits &amp; replay details</a></sub>
 
@@ -34,7 +34,7 @@ it, helping the frozen model continue its work across compactions.
 - **2026-10-09** — REMORY ranked **#2 Paper of the day** on
   [Hugging Face Daily Papers](https://huggingface.co/papers/date/2026-10-09).
 
-https://github.com/user-attachments/assets/cd7dd6ad-e4a5-4c89-bbed-043e8e5269fd
+https://github.com/user-attachments/assets/b83e4d92-2b32-4f7c-9a8e-cb7e44078955
 
 <sub>Music: <a href="https://www.scottbuckley.com.au/library/electric-dreams/">Electric Dreams</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="assets/README.md#demo">Credits &amp; edit details</a></sub>
 
