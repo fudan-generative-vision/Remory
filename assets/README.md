@@ -1,12 +1,5 @@
 # Assets
 
-## Daily Papers badge
-
-`hf-paper-of-the-day.svg` records REMORY's **#2 Paper of the day** placement on
-[Hugging Face Daily Papers, October 9, 2026](https://huggingface.co/papers/date/2026-10-09).
-The date and ranking were verified against the [paper page](https://huggingface.co/papers/2610.11287)
-on October 18, 2026.
-
 ## Paper figures
 
 - `remory.png`: the residual-compensation figure from the paper, rendered from

@@ -8,10 +8,6 @@
   <a href="#models"><img src="https://img.shields.io/badge/Hugging_Face-Models-e0af68?style=flat-square&amp;logo=huggingface&amp;logoColor=white&amp;labelColor=1a1b26" alt="Models on Hugging Face"></a>
 </p>
 
-<p align="center">
-  <a href="https://huggingface.co/papers/date/2026-10-09"><img src="assets/hf-paper-of-the-day.svg" width="352" alt="Hugging Face Daily Papers — #2 Paper of the day — October 9, 2026"></a>
-</p>
-
 **Remory** supplements an agent's compaction summary with learned soft memory
 from its history. The memory is conditioned on the summary and appended after
 it, helping the frozen model continue its work across compactions.
@@ -31,8 +27,6 @@ it, helping the frozen model continue its work across compactions.
   Use `/remory status` to follow progress and `/remory stop` to save and stop.
   Qwen stays frozen; selected memory weights apply at the next successful
   compaction. [Setup and commands](integrations/codex/online-training.md).
-- **2026-10-09** — REMORY ranked **#2 Paper of the day** on
-  [Hugging Face Daily Papers](https://huggingface.co/papers/date/2026-10-09).
 
 https://github.com/user-attachments/assets/b83e4d92-2b32-4f7c-9a8e-cb7e44078955
 
