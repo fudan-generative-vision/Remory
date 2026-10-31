@@ -14,13 +14,11 @@ it, helping the frozen model continue its work across compactions.
 
 ## News
 
-- **2026-10-20** — **77 hours of sustained AI research:** From an idea through
-  experiments and manuscript revisions.
-  With REMORY, a small open model can become a reliable research co-worker.
-
-  https://github.com/user-attachments/assets/a69eb0ed-e65a-442d-a92a-49945f019473
-
-  <sub>Music: <a href="https://www.scottbuckley.com.au/library/origami/">Origami</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="assets/README.md#auto-research-demo">Credits &amp; replay details</a></sub>
+- **2026-10-31** — **29.3328 on ASI-Bench with just Qwen3.8-27B + REMORY-1.9B!**
+  Our small open model surpasses the [published scores](https://asibench.apexin.ai/leaderboard/)
+  of trillion-parameter models **Kimi-K2.7 (27.34), DeepSeek-V4-Pro (24.98),
+  and MiMo-V2.5-Pro (23.25)**.
+  [Scored result](assets/asi-bench-result.pdf) · [Comparison sources](assets/README.md#asi-bench-result).
 
 - **2026-10-18** — **Online training in r-codex:** `/remory train` learns from
   ongoing Qwen sessions; `/remory load` opens the memory-checkpoint picker.
@@ -94,7 +92,7 @@ This opens the native Codex UI with Remory compaction. Use `/compact` during a
 session and `r-codex resume --last` to return later. Codex is installed on first
 use. See [Codex](integrations/codex) for sessions, sub-agents, and MCP tools.
 
-For the research demo's web search and document tools, enable
+For web search and document tools, enable
 `--research-tools`. This requires **`SERPER_API_KEY`** and **`MINERU_API_KEY`**
 (`MINERU_API_TOKEN` is also accepted), plus the separate Docling/MinerU tool
 environment. Run `r-codex tools` to check your setup. See

@@ -86,7 +86,7 @@ GPUs. See the [setup, commands and sample rules](online-training.md).
 
 ## Research tools and API keys
 
-To use the search and document tools from the research demo, install the
+To use the search and document tools, install the
 document servers and enable `--research-tools`:
 
 | Capability | Tool | Required configuration |

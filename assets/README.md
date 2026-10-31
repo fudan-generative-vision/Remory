@@ -9,28 +9,27 @@
 
 Source: [Remory preprint](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B/tree/main/paper).
 
-## Auto Research demo
+## ASI-Bench result
 
-The 48-second `remory-co-worker.mp4` replays **Qwen3.8-27B + REMORY-1.9B**
-working on Oracle across October 13–16, 2026: literature, implementation, training, sub-agents,
-diagnosis, review, experiments, evaluation, and manuscript revisions. The first
-36 seconds compress the recorded research into a continuous workflow. Five
-human directions are edited for clarity and identified on screen; this is
-research with human oversight. Elapsed session time includes waiting and does
-not represent continuous inference.
+`asi-bench-result.pdf` is the ASI-Bench submission portal export captured on
+October 31, 2026. It records a **29.3328** score for the Qwen3.8-27B + REMORY-1.9B
+run, submitted on October 25, with **240 instances**, `sandbox=os`, and status
+`scored`.
 
-The video then zooms out to a 4×4 montage: Oracle in the upper-left cell,
-Flow Drafter, and 14 ASI-Bench scientific tasks. These are edited replays of
-separate session timelines; the grid does not imply simultaneous execution or
-benchmark success. The research assistant is distinct from the experimental
-models. Manuscript and result snapshots reflect the recorded work, not an
-independently validated paper or a controlled comparison across protocols.
+The October 31 news item compares this score with the published overall means
+on the [official ASI-Bench leaderboard](https://asibench.apexin.ai/leaderboard/).
+For each reference model, it uses the highest-scoring listed harness:
+**Claude Code, Max effort**, averaged over three adopted rounds.
 
-Music: [Origami](https://www.scottbuckley.com.au/library/origami/)
-by [Scott Buckley](https://www.scottbuckley.com.au), released under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-The 48-second excerpt retains the original tempo and is trimmed, faded, and
-level-adjusted.
+| Model | Published ASI-Bench score | Total parameters | Official model source |
+| --- | ---: | ---: | --- |
+| Kimi-K2.7 | 27.34 | 1T | [Moonshot model card](https://huggingface.co/moonshotai/Kimi-K2.7-Code#2-model-summary) |
+| DeepSeek-V4-Pro | 24.98 | 1.6T | [DeepSeek release](https://api-docs.deepseek.com/news/news260424/) |
+| MiMo-V2.5-Pro | 23.25 | 1T | [Xiaomi model release](https://mimo.mi.com/docs/en-US/updates/model) |
+
+Scores are rounded to two decimal places from the
+[official aggregate data](https://asibench.apexin.ai/data/leaderboard_preview.json).
+Parameter counts refer to total model parameters.
 
 ## Demo
 
