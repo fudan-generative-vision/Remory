@@ -38,7 +38,18 @@ Apache-2.0 license is included in `LICENSES/Codex-Apache-2.0.txt`. The
 integration does not imply upstream endorsement. The provider and launcher
 adapt the local Recursive Memory inference harness (MIT).
 
+## Video credits
+
 The demo soundtrack, [Electric Dreams](https://www.scottbuckley.com.au/library/electric-dreams/)
 by Scott Buckley, is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 The video uses a trimmed, faded, and level-adjusted excerpt. This music license
 is separate from the repository's code license.
+
+Brain illustration and animation: adapted from the
+[Harvard–Oxford atlas distributed by FSL](https://fsl.fmrib.ox.ac.uk/fsl/docs/other/datasets.html).
+Credit: David Kennedy, Christian Haselgrove, Bruce Fischl, Janis Breeze,
+Jean Frazier, Larry Seidman, and Jill Goldstein. The adapted brain mesh and
+animation are released under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+Changes include a left-hemisphere cortical mesh, transparent cortex, TokyoNight
+colors, 3D camera rotation, and motion-graphics composition.

@@ -28,7 +28,7 @@ it, helping the frozen model continue its work across compactions.
 
 https://github.com/user-attachments/assets/b83e4d92-2b32-4f7c-9a8e-cb7e44078955
 
-<sub>Music: <a href="https://www.scottbuckley.com.au/library/electric-dreams/">Electric Dreams</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="assets/README.md#demo">Credits &amp; edit details</a></sub>
+<sub>Music: <a href="https://www.scottbuckley.com.au/library/electric-dreams/">Electric Dreams</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="NOTICES.md#video-credits">Credits</a></sub>
 
 ![Remory: summary-conditioned residual memory alongside standard Codex compaction, with training curves from the paper.](assets/remory.png)
 
