@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+*.sqlite
+*.sqlite-*
+*.pt
+*.safetensors
+checkpoints/
+runs/
+prepared/
+.venv*/

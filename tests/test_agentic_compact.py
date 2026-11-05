@@ -1,13 +1,14 @@
 from contextlib import contextmanager
 from copy import deepcopy
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
 from remory.codex.folding import FoldState
 from remory.codex.provider import Provider
-from remory.codex.terminal import CommandAliases
+from remory.codex.session_control import SessionControl, command
 from test_codex import Tokenizer
 
 
@@ -152,42 +153,67 @@ def test_failed_fold_or_checkpoint_write_keeps_parent_and_cleans_new_memory(tmp_
     assert not p._path('root').exists()
 
 
-def test_session_command_does_not_infer_enable_from_history_or_call_model(tmp_path):
+def test_online_capture_uses_folded_context_and_retries_ack_without_reencoding(tmp_path):
+    events, captures, accepts = [], [], []
+    selected, sample = 'a' * 64, 'b' * 32
+    def backend(request):
+        if request.url.path == '/v1/compact':
+            body = json.loads(request.content)
+            captures.append(body)
+            assert body['encoder_version'] == selected
+            assert body['capture_opening_ids'] == list(b'[assistant]<think>')
+            encoded = bytes(body['history_ids'])
+            assert b'Observed test failure.' in encoded
+            assert b'Detailed observations' not in encoded
+            return httpx.Response(200, json={'handle': 'rm_' + '1' * 48,
+                'receipt': {}, 'sample_id': sample})
+        assert request.url.path == '/v1/remory/samples/' + sample + '/accept'
+        assert p._load('root')['checkpoints'], 'Sample accepted before durable parent memory'
+        accepts.append(True)
+        return httpx.Response(503 if len(accepts) == 1 else 200, json={'accepted': len(accepts) > 1})
+    control = SimpleNamespace(selection=lambda: {'id': selected}, applied=lambda _: None)
+    p = Provider('http://local', {'identity': 'test', 'config': {'target_model': 'local'}},
+        Tokenizer(), tmp_path, session_id='session', online_control=control,
+        transport=httpx.MockTransport(backend))
+    p.folder = Folder(events)
+    p.agentic_compact_command()
+    req = compact_request(False)
+    req['input'].extend([{'role': 'user', 'content': 'Continue from that failure.'},
+                         {'type': 'compaction_trigger'}])
+    first = p.handle(req)
+    assert p._load('root')['online_pending']
+    assert events == ['spawn', 'close']
+    assert p.handle(req) == first
+    assert not p._load('root')['online_pending']
+    assert len(captures) == 1 and len(accepts) == 2
+
+
+def test_session_control_is_root_only_and_does_not_call_model(tmp_path):
     events = []
     p = provider(tmp_path, events)
-    p.session_commands = True
-    p.handle({'input': '[Remory session] /agentic_compact'})
+    control = SessionControl(p, 'root')
+    control.check_thread('root')
+    assert 'ON' in control.execute(['agentic_compact'])
     assert p.meta['agentic_compact']
+    with pytest.raises(ValueError, match='root thread'):
+        control.check_thread('child')
+    assert 'OFF' in control.execute(['agentic_compact', 'off'])
+    assert 'OFF' in control.execute(['agentic_compact', 'status'])
+    with pytest.raises(ValueError, match='not enabled'):
+        control.execute(['train'])
     assert not events
-    assert p._control({'input': [{'role': 'user', 'content': '[Remory session] /agentic_compact'},
-        {'role': 'assistant', 'content': 'ack'}]}, 'root') is None
-    assert p._control({'input': '[Remory session] /agentic_compact'}, 'child') is None
-    p.handle({'input': '[Remory session] /agentic_compact off'})
-    assert not p.meta['agentic_compact']
-    p.handle({'input': '[Remory session] /agentic_compact status'})
-    assert not p.meta['agentic_compact']
 
 
-@pytest.mark.parametrize('input_bytes,expected', [
-    (b'/agentic_compact\r', b'\x1b[200~[Remory session] /agentic_compact\x1b[201~\r'),
-    (b'/agentic_compact off\r', b'\x1b[200~[Remory session] /agentic_compact off\x1b[201~\r'),
-    (b'/compact\r', b'/compact\r'),
-    (b'quote /agentic_compact\r', b'quote /agentic_compact\r'),
-    (b'/agentic_compact_extra\r', b'/agentic_compact_extra\r'),
-    (b'\x1b[200~/agentic_compact\x1b[201~\r', b'\x1b[200~[Remory session] /agentic_compact\x1b[201~\r'),
-    (b'\x1b[A/agentic_compact\r', b'\x1b[A/agentic_compact\r'),
-    (b'\x1b[?1u\x1b[2;1R/agentic_compact\x1b[13u',
-     b'\x1b[?1u\x1b[2;1R\x1b[200~[Remory session] /agentic_compact\x1b[201~\x1b[13u'),
+@pytest.mark.parametrize('text,expected', [
+    ('/agentic_compact', ['agentic_compact']),
+    ('/agentic_compact off', ['agentic_compact', 'off']),
+    ('/agentic_compact status', ['agentic_compact', 'status']),
+    ('/remory train', ['train']),
+    ('/compact', None),
+    ('quote /agentic_compact', None),
+    ('`/agentic_compact`', None),
+    ('/agentic_compact_extra', None),
 ])
-def test_terminal_alias_chunking_paste_and_ordinary_input(input_bytes, expected):
-    for chunk_size in range(1, len(input_bytes) + 1):
-        aliases = CommandAliases()
-        actual = b''.join(aliases.feed(input_bytes[i:i + chunk_size])
-                          for i in range(0, len(input_bytes), chunk_size))
-        assert actual == expected
-
-
-def test_terminal_escape_is_not_swallowed():
-    aliases = CommandAliases()
-    assert aliases.feed(b'\x1b') == b''
-    assert aliases.flush_escape() == b'\x1b'
+def test_only_exact_standalone_commands_are_intercepted(text, expected):
+    assert command({'input': [{'type': 'text', 'text': text}]}) == expected
+    assert command({'input': [{'type': 'text', 'text': text}, {'type': 'image'}]}) is None

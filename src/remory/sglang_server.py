@@ -70,7 +70,8 @@ def extend_app(http_server, engine):
 
     memory_app = create_app(engine)
     app.router.routes.extend(r for r in memory_app.routes if getattr(r, "path", "") in {
-        "/v1/compact", "/v1/memories/{handle}", "/v1/remory/info"})
+        "/v1/compact", "/v1/memories/{handle}", "/v1/remory/info",
+        "/v1/remory/samples/{ident}/accept"})
     app.openapi_schema = None
 
 
@@ -115,6 +116,16 @@ def launch(args):
         backend = SGLangHTTPBackend(f"http://{host}:{args.port}", config, actor, context_limit=limit)
         engine = Remory(backend, MemoryStore(args.store))
     engine.model_config = config
+    os.environ.pop("REMORY_ENCODER_DIRECTORY", None)
+    if getattr(args, "online_training_dir", None):
+        if is_glm(config):
+            raise ValueError("Online training currently supports Qwen3.8-27B only")
+        from .online.collect import Pool
+        from .online.devices import serving_devices
+        engine.online = Pool(args.online_training_dir, config=config, base=checkpoint,
+            actor=actor, identity=engine.contract.identity,
+            serving_gpus=serving_devices(args.gpu, args.tp_size))
+        os.environ["REMORY_ENCODER_DIRECTORY"] = str(engine.online.root)
     extend_app(http_server, engine)
     server_args = ServerArgs(**engine_settings(settings), host=args.host, port=args.port)
     print(f"[Remory] Starting SGLang at http://{host}:{args.port}; context window: {limit:,} tokens.", flush=True)

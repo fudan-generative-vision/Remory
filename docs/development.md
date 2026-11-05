@@ -45,6 +45,44 @@ recursion, and storage; the backend supplies encoding and embedding-aware genera
 
 ## Tested setup
 
+The 2026-10-18 slash-command update passed 96 runtime tests. Native Codex 0.149.0
+checks with fixture inference covered `/remory` and its backslash alias, text
+and Enter arriving together, bracketed and multiline pastes, the native
+permissions menu, Unicode input, terminal resizing, and the exit/resume hint.
+Enter handles a local command during model generation; Tab retains native
+queueing and handles the command locally when that turn completes. Local
+commands did not reach the fixture model. The existing checkpoint-picker and
+command-queue checks also passed.
+
+The 2026-10-18 r-codex follow-up fixes passed all 89 runtime tests. Native Codex
+0.149.0 terminal checks with fixture inference covered Unicode input, window
+resizing, the r-codex exit hint, and UUID resumption into the same saved session.
+They also covered checkpoint verification, duplicate-command acknowledgement,
+queued commands, and status queries during verification and model generation.
+Picker cancellation and late responses are covered by the transport tests.
+
+On 2026-10-18, the online-training changes passed 131 Python tests, including
+the training suite. A native Codex 0.149.0 terminal smoke test exercised all four
+`\remory` commands, the checkpoint picker, and command input during a busy turn.
+That terminal test used fixture inference and verified that local commands never
+reached the model.
+
+A separate GPU smoke test used the full frozen Qwen3.8-27B reader and released
+REMORY checkpoint for one optimization step on a short synthetic frontier.
+It produced finite, nonzero memory gradients and changed 110 of the encoder's
+117 tensors while keeping the reader frozen. Resuming the saved optimizer/RNG
+state repaired deliberately interrupted publication pointers without repeating
+the consumed sample. This validates the update and resume paths, not downstream
+task quality or long-context training memory requirements.
+
+The updated public SGLang server also passed a live short-input check on an
+independent GPU: capture and acknowledge a compaction, generate a complete
+teacher continuation, select the trained checkpoint, and compact and generate
+with its weights. Existing memory tensors remained unchanged and usable;
+returning to the released encoder reproduced the original residual tensors.
+Another session retained its original selection. The temporary server was
+stopped after the check.
+
 On 2026-10-13, a fresh installation of the shared SGLang runtime passed 51 Python
 tests and dependency checks, using Python 3.12, PyTorch 2.13.0, Transformers
 5.12.1, and CUDA 13.0. Four JavaScript tests also passed with Node 22. The installer

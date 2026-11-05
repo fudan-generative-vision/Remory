@@ -345,6 +345,8 @@ class NativeFolder:
                         raise RuntimeError('Folding bridge failed to start')
                     time.sleep(.02)
                 config = deepcopy(self.runtime)
+                if snapshot.get('reasoning_effort'):
+                    config['model_reasoning_effort'] = snapshot['reasoning_effort']
                 config.update(approval_policy='never', sandbox_mode='read-only',
                               agents={'max_threads': 2, 'max_depth': 1})
                 config['model_provider'] = 'remory_local'
@@ -385,7 +387,7 @@ class NativeFolder:
                     result['audit']['director_thread'] = director.root
                     result['audit']['organizer_thread'] = director.child
                     result['audit']['model'] = self.provider.config.get('target_model')
-                    result['audit']['reasoning_effort'] = self.runtime.get('model_reasoning_effort')
+                    result['audit']['reasoning_effort'] = config.get('model_reasoning_effort')
                     result['usage'] = dict(director.usage)
                     yield result
             finally:

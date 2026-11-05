@@ -1,8 +1,9 @@
 """A local Responses provider for native Codex, backed by one Remory server."""
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager, ExitStack
 from copy import deepcopy
 import hashlib
 import json
+import logging
 from pathlib import Path
 import threading
 import time
@@ -23,6 +24,13 @@ class CodexChatTemplate(ChatTemplate):
     post-compaction tool continuation. A temporary boundary is removed before
     tokenization; it is never submitted to the model.
     """
+    def summary(self, text):
+        # Quoted vision markers in code/tool output are ordinary text, not image
+        # attachments. Actual images use the separate _image request below.
+        for marker in ('<|image_pad|>', '<|video_pad|>', '<|vision_start|>', '<|vision_end|>'):
+            text = text.replace(marker, marker.replace('<', r'\u003c').replace('>', r'\u003e'))
+        return super().summary(text)
+
     def split(self, prefix_messages, messages, *, generation=False):
         boundary = {'role': 'user', 'content': 'REMORY_TEMPLATE_BOUNDARY'}
         kwargs = dict(tools=self.tools, tokenize=False, **self.template_kwargs)
@@ -61,19 +69,19 @@ def atomic_json(path, value):
 
 class Provider:
     def __init__(self, url, info, tokenizer, directory, *, session_id,
-                 max_new_tokens=16384, transport=None):
+                 max_new_tokens=16384, transport=None, online_control=None):
         self.url, self.info, self.tokenizer = url.rstrip('/'), info, tokenizer
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.session_id, self.max_new_tokens = session_id, max_new_tokens
         self.transport = transport
+        self.online = online_control
         self.config = info['config']
         self.glm = self.config.get('schema') == 'remory_glm53_local_evaluation_v1'
         self._lock = threading.RLock()
         self._locks = {}
         self._closed = False
         self.folder = None
-        self.session_commands = False
         self.meta_path = self.directory / 'provider.json'
         if self.meta_path.exists():
             self.meta = json.loads(self.meta_path.read_text())
@@ -104,22 +112,6 @@ class Provider:
                 + ('Manual /compact and automatic compaction use an isolated native organizer.'
                    if enabled else 'Compaction uses the standard Remory summary path.'))
 
-    def _control(self, request, thread):
-        if not self.session_commands or thread != self.meta['root_thread_id']:
-            return None
-        items = request.get('input', [])
-        if isinstance(items, str):
-            items = [{'role': 'user', 'content': items}]
-        if not isinstance(items, list) or not items or not isinstance(items[-1], dict) or items[-1].get('role') != 'user':
-            return None
-        text = content_text(items[-1].get('content')).strip()
-        command = '[Remory session] /agentic_compact'
-        if text == command or text.startswith(command + ' '):
-            try:
-                return self.agentic_compact_command(text[len(command):])
-            except (ValueError, RuntimeError) as exc:
-                return str(exc)
-        return None
 
     @contextmanager
     def _memory_transaction(self):
@@ -149,15 +141,17 @@ class Provider:
                         import warnings
                         warnings.warn('Uncommitted memory cleanup could not be recorded', RuntimeWarning)
 
+
     def _agentic_compact(self, codec, prefix, messages, previous, tools, client,
-                         branches, lifecycle):
+                         branches, lifecycle, *, capture=False, reasoning=None):
         if self.folder is None:
             raise RuntimeError('Native folding runtime is unavailable; original context retained')
         snapshot = dict(messages=deepcopy(messages), prefix=deepcopy(prefix),
                         previous_summary=previous['summary'] if previous else None,
                         branch_summaries=[b['summary'] for b in branches],
                         model=self.config['target_model'],
-                        summary_contract=deepcopy(self.config.get('summary_contract', {})))
+                        summary_contract=deepcopy(self.config.get('summary_contract', {})),
+                        reasoning_effort=reasoning)
         folded = lifecycle.enter_context(self.folder.fold(snapshot))
         # Validate again at the parent trust boundary. The native runner owns
         # only a copy and cannot choose prefix, previous handle, or branches.
@@ -168,7 +162,6 @@ class Provider:
         verified = validator.result
         if verified['messages'] != folded['messages']:
             raise ValueError('Organizer result differs from its validated edit plan')
-        prefix_ids, history_ids = codec.split(prefix, verified['messages'])
         summary_ids = codec.summary(verified['summary'])
         contract = self.config.get('summary_contract', {})
         if len(summary_ids) > min(contract.get('max_summary_tokens', 4096), self.max_new_tokens):
@@ -176,18 +169,16 @@ class Provider:
         if contract.get('output_schema'):
             from jsonschema import validate
             validate(json.loads(verified['summary']), contract['output_schema'])
-        memory = client.compact(prefix_ids=prefix_ids, history_ids=history_ids,
-            summary_ids=summary_ids, previous=previous['handle'] if previous else None,
-            branches=[b['handle'] for b in branches])
-        checkpoint = dict(handle=memory['handle'], summary=verified['summary'], prefix=prefix,
-                          tools_sha256=digest(tools), receipt=memory['receipt'],
-                          folding={**verified['audit'], **folded.get('audit', {})})
+        checkpoint = self._encode_checkpoint(codec, prefix, verified['messages'], previous, tools,
+            client, branches, verified['summary'], online=True, capture=capture)
+        checkpoint['folding'] = {**verified['audit'], **folded.get('audit', {})}
         return checkpoint, {'meta_info': folded.get('usage', {})}
+
 
     @contextmanager
     def client(self):
         with Client(self.url, session_id=self.session_id, timeout=1800,
-                    transport=self.transport) as client:
+                    transport=self.transport, trust_env=False) as client:
             yield client
 
     def _thread(self, headers):
@@ -241,7 +232,7 @@ class Provider:
                       'Describe this image for a coding agent. Include visible text, layout, '
                       'errors, and details useful for debugging. Do not invent unseen content.'
                       '<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n')
-            with httpx.Client(timeout=1800, transport=self.transport) as http:
+            with httpx.Client(timeout=1800, transport=self.transport, trust_env=False) as http:
                 response = http.post(self.url + '/generate', json={'text': prompt,
                     'image_data': [url], 'sampling_params': {'temperature': 0, 'max_new_tokens': 2048}})
                 response.raise_for_status()
@@ -309,7 +300,8 @@ class Provider:
                 message['content'] = '[Developer instructions from the harness]\n' + message['content']
         return codec, prefix, messages, previous, routes, bool(trigger), tools
 
-    def _compact(self, codec, prefix, messages, previous, tools, client, branches=()):
+    def _compact(self, codec, prefix, messages, previous, tools, client, branches=(), *, online=False,
+                 capture=False):
         if not messages and previous is None:
             raise ValueError('There is no history to compact')
         prefix_ids, history_ids = codec.split(prefix, messages)
@@ -344,34 +336,75 @@ class Provider:
             summary = summary.removesuffix(end).rstrip()
         if not summary.strip():
             raise RuntimeError('Summary is empty; the original context is retained')
+        return self._encode_checkpoint(codec, prefix, messages, previous, tools, client,
+            branches, summary, online=online, capture=capture), result
+
+    def _encode_checkpoint(self, codec, prefix, messages, previous, tools, client, branches,
+                           summary, *, online=False, capture=False):
+        prefix_ids, history_ids = codec.split(prefix, messages)
+        extra = {}
+        if online and self.online is not None:
+            extra['encoder_version'] = self.online.selection()['id']
+            # Supervise the exact encoded (possibly folded) context, never the
+            # organizer's scratch turns or unaccepted candidates.
+            if capture and not branches and messages and messages[-1]['role'] != 'assistant':
+                _, opened = codec.split(prefix, messages, generation=True)
+                if opened[:len(history_ids)] == history_ids and opened[len(history_ids):]:
+                    extra['capture_opening_ids'] = opened[len(history_ids):]
         memory = client.compact(prefix_ids=prefix_ids, history_ids=history_ids,
             summary_ids=codec.summary(summary), previous=previous['handle'] if previous else None,
-            branches=[branch['handle'] for branch in branches])
-        return {'handle': memory['handle'], 'summary': summary.strip(), 'prefix': prefix,
-                'tools_sha256': digest(tools), 'receipt': memory['receipt']}, result
+            branches=[branch['handle'] for branch in branches], **extra)
+        checkpoint = dict(handle=memory['handle'], summary=summary.strip(), prefix=prefix,
+                          tools_sha256=digest(tools), receipt=memory['receipt'])
+        if extra:
+            checkpoint['online'] = dict(encoder_version=extra['encoder_version'], sample_id=memory.get('sample_id'))
+        return checkpoint
+
+    def _flush_online(self, thread, state):
+        if self.online is None or not state.get('online_pending'):
+            return
+        pending = list(state['online_pending'])
+        try:
+            with self.client() as client:
+                for item in pending:
+                    self.online.applied(item['encoder_version'])
+                    if item.get('sample_id'):
+                        client.accept_sample(item['sample_id'])
+                    state['online_pending'].remove(item)
+            atomic_json(self._path(thread), state)
+        except (OSError, ValueError, RuntimeError, httpx.HTTPError):
+            # The memory descriptor is already durable. Keep acknowledgements
+            # queued for the next request without invalidating this compaction.
+            logging.getLogger(__name__).exception('Online acknowledgement will be retried')
+
+    def _reconcile_thread(self, thread, state, *, activity=False):
+        """Recover routing from durable thread state without re-encoding its memory."""
+        with self._lock:
+            entry = self.meta['threads'][thread]
+            completion = state.get('completion')
+            if not activity and (not completion or entry.get('completion') == completion):
+                return
+            updated = deepcopy(self.meta)
+            if activity:
+                updated['threads'][thread]['last_activity'] = time.time()
+            if completion:
+                updated['threads'][thread]['completion'] = deepcopy(completion)
+            atomic_json(self.meta_path, updated)
+            self.meta = updated
 
     def handle(self, request, headers=None, *, force_compact=False):
         if not isinstance(request, dict):
             raise ValueError('Responses request must be an object')
         thread, lock = self._thread(headers or {})
         with lock, ExitStack() as lifecycle, self._memory_transaction() as transaction:
-            created, committed = transaction
+            created, durable = transaction
             state = self._load(thread)
+            self._flush_online(thread, state)
+            committed = []
             request_key = digest({'request': request, 'force_compact': force_compact})
             if request_key in state['responses']:
+                self._reconcile_thread(thread, state)
                 return state['responses'][request_key]
-            control = self._control(request, thread)
-            if control is not None:
-                response = {'id': 'resp_' + uuid.uuid4().hex, 'object': 'response',
-                    'created_at': int(time.time()), 'status': 'completed',
-                    'model': request.get('model', 'remory'), 'output': [{
-                        'type': 'message', 'id': 'msg_' + uuid.uuid4().hex, 'role': 'assistant',
-                        'status': 'completed', 'channel': 'final',
-                        'content': [{'type': 'output_text', 'text': control, 'annotations': []}]}],
-                    'usage': {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}}
-                state['responses'][request_key] = response
-                atomic_json(self._path(thread), state)
-                return response
             codec, prefix, messages, previous, routes, compact, tools = self._context(request, state)
             agentic = thread == self.meta['root_thread_id'] and self.meta.get('agentic_compact', False)
             with self.client() as client:
@@ -385,8 +418,10 @@ class Provider:
                                 and completion['handle'] not in state.get('folded', [])):
                             branches.append(completion)
                 if branches and not (compact or force_compact) and not agentic:
-                    previous, _ = self._compact(codec, prefix, messages, previous, tools, client, branches)
+                    previous, _ = self._compact(codec, prefix, messages, previous, tools, client, branches,
+                        online=True)
                     created.append(previous['handle'])
+                    committed.append(previous)
                     previous['instructions'] = request.get('instructions') or 'You are a coding assistant. Use the available tools to complete the user task.'
                     previous['wire_base'] = self._wire_items(request.get('input', []))
                     state['auto_checkpoint'] = previous
@@ -394,11 +429,14 @@ class Provider:
                     messages = []
                 if compact or force_compact:
                     if agentic:
-                        checkpoint, generated = self._agentic_compact(codec, prefix, messages,
-                            previous, tools, client, branches, lifecycle)
+                        checkpoint, generated = self._agentic_compact(codec, prefix, messages, previous,
+                            tools, client, branches, lifecycle, capture=not state['images'],
+                            reasoning=(request.get('reasoning') or {}).get('effort'))
                     else:
-                        checkpoint, generated = self._compact(codec, prefix, messages, previous, tools, client, branches)
+                        checkpoint, generated = self._compact(codec, prefix, messages, previous, tools, client, branches,
+                            online=thread == self.meta['root_thread_id'], capture=not state['images'])
                     created.append(checkpoint['handle'])
+                    committed.append(checkpoint)
                     checkpoint['instructions'] = request.get('instructions') or 'You are a coding assistant. Use the available tools to complete the user task.'
                     marker = 'remory.v1.' + checkpoint['handle']
                     state['checkpoints'][marker] = checkpoint
@@ -439,20 +477,16 @@ class Provider:
                           'total_tokens': input_tokens + output_tokens,
                           'input_tokens_details': {'cached_tokens': 0}}}
             state['responses'][request_key] = response
+            state.setdefault('online_pending', []).extend(c['online'] for c in committed if c.get('online'))
             atomic_json(self._path(thread), state)
-            committed.append(True)
-            with self._lock:
-                self.meta['threads'][thread]['last_activity'] = time.time()
-                if state.get('completion'):
-                    self.meta['threads'][thread]['completion'] = state['completion']
-                atomic_json(self.meta_path, self.meta)
+            durable.append(True)
+            self._flush_online(thread, state)
+            self._reconcile_thread(thread, state, activity=True)
             return response
 
     def close(self):
         with self._lock:
             self._closed = True
-        # A compaction worker can outlive the terminal request. Cancel its
-        # private organizer without holding the provider metadata lock.
         close_folder = getattr(self.folder, 'close', None)
         if close_folder is not None:
             close_folder()

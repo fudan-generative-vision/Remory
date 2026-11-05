@@ -1,4 +1,4 @@
-"""Optional CPU smoke through the real TUI, PTY alias and provider."""
+"""Optional CPU smoke through the real TUI, local RPC channel and provider."""
 import json
 import os
 from pathlib import Path
@@ -23,6 +23,9 @@ import httpx
 from remory.codex.cli import build_catalog, environment, serve, toml
 from remory.codex.provider import Provider
 from remory.codex.terminal import run_terminal
+from remory.codex.host import host
+from remory.codex.frontend import endpoint
+from remory.codex.session_control import SessionControl
 from test_codex import Tokenizer
 directory, binary = Path(sys.argv[1]), sys.argv[2]
 (directory / '.codex').mkdir()
@@ -31,7 +34,6 @@ def backend(request):
 p = Provider('http://unused', {'identity':'fake', 'config':{'target_model':'fake'}},
     Tokenizer(), directory / 'provider', session_id='fake', transport=httpx.MockTransport(backend))
 p.folder = object()
-p.session_commands = True
 env = environment(directory, 'local')
 catalog = build_catalog(binary, directory, env, 262144, 'Fake local')
 with serve(p, 'local') as url:
@@ -42,7 +44,11 @@ with serve(p, 'local') as url:
         'env_key':'REMORY_CODEX_TOKEN','wire_api':'responses','requires_openai_auth':False,
         'request_max_retries':0,'stream_max_retries':0}})
     (directory / '.codex/config.toml').write_text('\\n'.join(f'{k} = {toml(v)}' for k,v in config.items()))
-    run_terminal([binary, '-C', str(directory), '--no-alt-screen'], directory, env)
+    with host(directory, binary, directory, env, None, 'remory') as native:
+        controls = SessionControl(p, native['thread_id'])
+        with endpoint(directory, native['endpoint'], control=controls) as address:
+            run_terminal([binary, 'resume', '--remote', address, native['thread_id'],
+                '-C', str(directory), '--no-alt-screen'], directory, env, session='fake', local_commands=True)
 ''')
     master, slave = pty.openpty()
     import fcntl

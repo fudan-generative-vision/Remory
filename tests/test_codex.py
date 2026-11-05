@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from remory.codex.protocol import messages_from_wire, parse_output, tools_from_wire
-from remory.codex.provider import Provider, create_app
+from remory.codex.provider import CodexChatTemplate, Provider, create_app
 
 TOOL = {'type': 'function', 'name': 'exec_command', 'description': 'Run a shell command',
         'parameters': {'type': 'object', 'properties': {'cmd': {'type': 'string'}},
@@ -154,3 +154,106 @@ def test_completed_child_is_folded_once_and_survives_provider_restart(tmp_path, 
     make().handle({**root, 'input': next_input}, root_headers)
     assert len([b for path, b in requests if path == '/v1/compact' and b.get('branches')]) == 1
     assert requests[-1][1]['remory']['handle'] == 'rm_' + f'{2:048x}'
+
+
+def test_zero_argument_tools_and_single_assistant_turn():
+    _, routes = tools_from_wire([{'type': 'function', 'name': 'get_goal', 'parameters': {
+        'type': 'object', 'properties': {}, 'additionalProperties': False}}])
+    output = parse_output('Check progress.</think>Inspecting the goal.'
+        '<tool_call><function=get_goal></function></tool_call>', routes)
+    call = output[-1]
+    assert json.loads(call['arguments']) == {}
+    messages = messages_from_wire(output + [{'type': 'function_call_output',
+        'call_id': call['call_id'], 'output': 'Active'}])
+    assert len(messages) == 2
+    assert messages[0]['reasoning_content'] == 'Check progress.'
+    assert messages[0]['content'] == 'Inspecting the goal.'
+    assert len(messages[0]['tool_calls']) == 1
+    with pytest.raises(ValueError, match='Missing tool outputs'):
+        messages_from_wire(output)
+    with pytest.raises(ValueError, match='no pending call'):
+        messages_from_wire([{'type': 'function_call_output', 'call_id': 'unknown', 'output': 'ok'}])
+
+
+def test_quoted_vision_markers_are_text():
+    codec = CodexChatTemplate(Tokenizer(), tools=[])
+    prefix, history = codec.split([{'role': 'system', 'content': 'Assist.'}], [
+        {'role': 'user', 'content': 'Explain <|image_pad|> and <|vision_start|>.'}])
+    text = bytes(prefix + history).decode()
+    assert '<|image_pad|>' not in text and r'\u003c|image_pad|\u003e' in text
+    assert '<|vision_start|>' not in text
+    assert '<|im_start|>' in text  # Native chat delimiters are preserved.
+
+
+def test_interrupted_undelivered_tool_is_not_replayed_on_new_turn(tmp_path, info):
+    received = []
+    def backend(request):
+        body = json.loads(request.content)
+        received.append(body)
+        text = ('</think><tool_call><function=exec_command><parameter=cmd>pwd</parameter>'
+                '</function></tool_call>') if len(received) == 1 else '</think>Cancelled.'
+        return httpx.Response(200, json={'text': text, 'meta_info': {'finish_reason': {'type': 'stop'}}})
+    def make():
+        return Provider('http://model', info, Tokenizer(), tmp_path, session_id='test',
+                        transport=httpx.MockTransport(backend))
+    first = {'tools': [TOOL], 'input': [{'role': 'user', 'content': 'Inspect project'}]}
+    proposal = make().handle(first)  # Generation completed, but the UI did not receive the tool.
+    assert proposal['output'][-1]['type'] == 'function_call'
+    next_turn = {**first, 'input': first['input'] + [{'role': 'user', 'content':
+        '<turn_aborted>Interrupted</turn_aborted>'}, {'role': 'user', 'content': 'Cancel that'}]}
+    answer = make().handle(next_turn)
+    assert answer['output'][-1]['content'][0]['text'] == 'Cancelled.'
+    assert b'pwd' not in bytes(received[-1]['input_ids'])
+
+
+def test_final_answer_can_be_compacted_then_resumed(tmp_path, info):
+    calls = []
+    def backend(request):
+        body = json.loads(request.content)
+        calls.append((request.url.path, body))
+        if request.url.path == '/v1/compact':
+            return httpx.Response(200, json={'handle': 'rm_' + '2' * 48, 'receipt': {}})
+        text = 'Completed work.' if body['input_ids'][-1] == 999 else '</think>Done.'
+        return httpx.Response(200, json={'text': text, 'meta_info': {'finish_reason': {'type': 'stop'}}})
+    p = Provider('http://model', info, Tokenizer(), tmp_path, session_id='test',
+                 transport=httpx.MockTransport(backend))
+    history = [{'role': 'user', 'content': 'Finish task'}]
+    final = p.handle({'input': history})
+    checkpoint = p.handle({'input': history + final['output'] + [{'type': 'compaction_trigger'}]})
+    assert checkpoint['output'][0]['type'] == 'compaction'
+    answer = p.handle({'input': checkpoint['output'] + [{'role': 'user', 'content': 'Next task'}]})
+    assert answer['output'][-1]['content'][0]['text'] == 'Done.'
+    assert calls[-1][1]['remory']['handle'] == 'rm_' + '2' * 48
+
+
+def test_provider_ignores_ambient_http_proxy(tmp_path, info, monkeypatch):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import threading
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers['Content-Length']))
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"text":"Direct local connection"}')
+
+        def log_message(self, *args):
+            pass
+
+    monkeypatch.setenv('ALL_PROXY', 'http://127.0.0.1:1')
+    monkeypatch.setenv('HTTP_PROXY', 'http://127.0.0.1:1')
+    monkeypatch.setenv('HTTPS_PROXY', 'http://127.0.0.1:1')
+    monkeypatch.setenv('NO_PROXY', '')
+    monkeypatch.setenv('no_proxy', '')
+    with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            p = Provider(f'http://127.0.0.1:{server.server_port}', info, Tokenizer(), tmp_path,
+                         session_id='test')
+            with p.client() as client:
+                assert client.generate(input_ids=[1])['text'] == 'Direct local connection'
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)

@@ -42,6 +42,8 @@ def main(argv=None):
     parser.add_argument("--base-gpu-id", "--gpu", dest="gpu", type=int, default=0,
         help="GPU index within CUDA_VISIBLE_DEVICES (default: 0)")
     parser.add_argument("--store", help="session database (default: <runtime-dir>/memory.sqlite)")
+    parser.add_argument("--online-training-dir", type=Path,
+        help="Enable Qwen sample collection and encoder versions in this shared local directory")
     parser.add_argument("--runtime-dir", type=Path,
         help="runtime directory (default: detected from the installed environment)")
     args = parser.parse_args(argv)

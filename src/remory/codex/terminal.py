@@ -1,213 +1,179 @@
-"""Native-terminal relay for r-codex's session command alias.
-
-Pinned Codex cannot register new bare slash commands. Translate a command typed
-at a fresh composer boundary to a provider-handled session message. All other
-input, terminal output, signals and resize events remain native Codex's.
-"""
+"""Keep the native terminal interaction and show the owning r-codex resume command."""
 import errno
+from contextlib import suppress
 import fcntl
 import os
-import pty
+import re
 import select
+import shlex
 import signal
 import subprocess
 import sys
 import termios
+import time
 import tty
 
+from .terminal_commands import CommandScreen, InputPackets
 
-class CommandAliases:
-    alias = b'/agentic_compact'
-    replacement = b'[Remory session] /agentic_compact'
 
-    def __init__(self):
-        self.pending = b''
-        self.fresh = True
-        self.escape = b''
-        self.pasted = False
-        self.command = None
+class ResumeHint:
+    prefix = b'To continue this session, run '
+    ansi = re.compile(rb'\x1b\[[0-?]*[ -/]*[@-~]')
 
-    def expansion(self, text=None):
-        # An injected command arrives much faster than human keystrokes. Mark
-        # it as a paste so native paste-burst detection cannot eat the Enter.
-        text = self.replacement if text is None else text
-        if self.pasted:
-            return text
-        return b'\x1b[200~' + text + b'\x1b[201~'
+    def __init__(self, session):
+        self.command = ('r-codex resume ' + shlex.quote(session)).encode()
+        self.buffer = b''
+        self.replaced = False
+
+    def line(self, value):
+        plain = self.ansi.sub(b'', value).rstrip(b'\r\n')
+        if re.fullmatch(re.escape(self.prefix) + rb'codex resume(?:[ ,].*)?', plain):
+            self.replaced = True
+            ending = b'\r\n' if value.endswith(b'\r\n') else b'\n' if value.endswith(b'\n') else b''
+            return self.prefix + self.command + b'\x1b[0m' + ending
+        return value
 
     def feed(self, data):
-        out = bytearray()
-        for byte in data:
-            char = bytes([byte])
-            if self.command is not None:
-                if byte in (8, 127):
-                    self.command = self.command[:-1]
-                elif byte in (3, 21):
-                    self.command = None
-                    self.fresh = True
-                    out.extend(char)
-                elif char in b'\r\n\t' or byte == 27:
-                    text = self.command
-                    if text == self.alias or text.startswith(self.alias + b' '):
-                        text = self.replacement + text[len(self.alias):]
-                    out.extend(self.expansion(text))
-                    self.command = None
-                    self.fresh = char in b'\r\n'
-                    if byte == 27:
-                        self.escape = char
-                    else:
-                        out.extend(char)
+        # Do not buffer terminal frames or parse input. Only the known exit
+        # sentence can be held, including when writes split it across chunks.
+        self.buffer += data
+        output = bytearray()
+        while self.buffer:
+            start = self.buffer.find(self.prefix)
+            if start < 0:
+                keep = next((n for n in range(min(len(self.buffer), len(self.prefix)-1), 0, -1)
+                             if self.buffer.endswith(self.prefix[:n])), 0)
+                if keep:
+                    output.extend(self.buffer[:-keep])
+                    self.buffer = self.buffer[-keep:]
                 else:
-                    self.command += char
-                continue
-            if self.escape:
-                self.escape += char
-                if self.escape in (b'\x1b[200~', b'\x1b[201~'):
-                    self.pasted = self.escape == b'\x1b[200~'
-                    if not self.pasted:
-                        # Paste terminators are a word boundary, not a submit.
-                        out.extend(self.replacement if self.pending == self.alias else self.pending)
-                        if self.pending:
-                            self.fresh = False
-                        self.pending = b''
-                    out.extend(self.escape)
-                    self.escape = b''
-                elif self.escape == b'\x1b[':
-                    continue
-                elif self.escape.startswith(b'\x1b[') and len(self.escape) < 64:
-                    if not 0x40 <= byte <= 0x7e:
-                        continue
-                    sequence, self.escape = self.escape, b''
-                    # Startup device/cursor/keyboard capability replies are not
-                    # composer edits. They must not disable the first command.
-                    if byte in (ord('R'), ord('c')) or sequence.startswith((b'\x1b[?', b'\x1b[>')):
-                        out.extend(sequence)
-                    elif sequence in (b'\x1b[13u', b'\x1b[13;1u', b'\x1b[9u', b'\x1b[9;1u'):
-                        key = b'\r' if sequence.startswith(b'\x1b[13') else b'\t'
-                        out.extend(self.feed(key)[:-1] + sequence)
-                    else:
-                        out.extend(self.pending + sequence)
-                        self.pending = b''
-                        self.fresh = False
-                else:
-                    out.extend(self.pending + self.escape)
-                    self.pending = self.escape = b''
-                    # Cursor motion/history makes the composer position unknown.
-                    self.fresh = False
-                continue
-            if byte == 27:
-                self.escape = char
-                continue
-            if self.pending:
-                if self.pending == self.alias and char in b' \r\n\t':
-                    if char == b' ' and not self.pasted:
-                        self.command = self.alias + char
-                    else:
-                        out.extend(self.expansion() + char)
-                    self.pending = b''
-                    self.fresh = char in b'\r\n' and not self.pasted
-                elif byte in (8, 127):
-                    self.pending = self.pending[:-1]
-                elif byte in (3, 21):
-                    self.pending = b''
-                    self.fresh = True
-                    out.extend(char)
-                elif self.alias.startswith(self.pending + char):
-                    self.pending += char
-                else:
-                    out.extend(self.pending + char)
-                    self.pending = b''
-                    self.fresh = char in b'\r\n' and not self.pasted
-                continue
-            if self.fresh and char == b'/':
-                self.pending = char
-                continue
-            out.extend(char)
-            if byte in (3, 21) or (char in b'\r\n' and not self.pasted):
-                self.fresh = True
-            elif char not in b'\r\n':
-                self.fresh = False
-        return bytes(out)
+                    output.extend(self.buffer)
+                    self.buffer = b''
+                break
+            output.extend(self.buffer[:start])
+            self.buffer = self.buffer[start:]
+            end = self.buffer.find(b'\n')
+            if end < 0:
+                if len(self.buffer) > 4096:
+                    output.extend(self.buffer)
+                    self.buffer = b''
+                break
+            output.extend(self.line(self.buffer[:end+1]))
+            self.buffer = self.buffer[end+1:]
+        return bytes(output)
 
-    def flush_escape(self):
-        if not self.escape:
-            return b''
-        output = self.pending + self.escape
-        self.pending = self.escape = b''
-        self.fresh = False
-        return output
+    def finish(self):
+        value, self.buffer = self.buffer, b''
+        return self.line(value)
 
 
-def run_terminal(command, workspace, env):
-    """Use a PTY so the alias works without replacing Codex's UI or bindings."""
-    master, slave = pty.openpty()
-    original = termios.tcgetattr(sys.stdin.fileno())
-    previous, child = {}, None
+def run_terminal(argv, workspace, env, *, session, local_commands=False):
+    """Keep native rendering and dispatch local /remory commands through its RPC."""
+    output = sys.stdout.fileno()
+    source = sys.stdin.fileno()
+    master, slave = os.openpty()
+    hint = ResumeHint(session)
+    child = None
+    packets = InputPackets()
+    size = os.get_terminal_size(output)
+    display = CommandScreen(size.columns, size.lines) if local_commands else None
+    previous = {}
+    saved_tty = termios.tcgetattr(source) if os.isatty(source) else None
 
     def resize(*_):
-        size = fcntl.ioctl(sys.stdin.fileno(), termios.TIOCGWINSZ, bytes(8))
-        fcntl.ioctl(master, termios.TIOCSWINSZ, size)
+        if os.isatty(output):
+            size = fcntl.ioctl(output, termios.TIOCGWINSZ, b'\0'*8)
+            fcntl.ioctl(master, termios.TIOCSWINSZ, size)
+            dimensions = os.get_terminal_size(output)
+            if display is not None:
+                display.resize(dimensions.columns, dimensions.lines)
+        if child is not None and child.poll() is None:
+            child.send_signal(signal.SIGWINCH)
 
-    def terminate(signum, _frame):
+    def write(data):
+        while data:
+            data = data[os.write(output, data):]
+
+    def copy_output():
+        try:
+            data = os.read(master, 65536)
+        except OSError as error:
+            if error.errno == errno.EIO:
+                return False
+            raise
+        if not data:
+            return False
+        if display is not None:
+            display.feed(data)
+        write(hint.feed(data))
+        return True
+
+    def send(data):
+        while data:
+            data = data[os.write(master, data):]
+
+    def refresh_composer():
+        # A paste and Enter can arrive in one read. Let the native renderer
+        # consume that text before examining its composer, including paste bursts.
+        until = time.monotonic() + .12
+        while time.monotonic() < until:
+            ready, _, _ = select.select([master], [], [], max(0, until-time.monotonic()))
+            if ready and not copy_output():
+                break
+
+    def terminate(signum, _):
         if child is not None and child.poll() is None:
             child.send_signal(signum)
         raise KeyboardInterrupt
 
     try:
+        # The outer terminal is raw while relaying, so keep the slave's normal
+        # newline translation for output after Codex restores its terminal mode.
         resize()
-        termios.tcsetattr(slave, termios.TCSANOW, original)
-        # Establish a controlling terminal after exec of this tiny helper. Avoid
-        # preexec_fn: the HTTP provider already has threads when we get here.
-        helper = ('import fcntl,os,sys,termios; '
-                  'fcntl.ioctl(0,termios.TIOCSCTTY,0); '
-                  'os.execvpe(sys.argv[1],sys.argv[1:],os.environ)')
-        child = subprocess.Popen([sys.executable, '-c', helper, *command], cwd=workspace,
-            env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
+        previous[signal.SIGINT] = signal.signal(signal.SIGINT, lambda *_: None)
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            previous[signum] = signal.signal(signum, terminate)
+        previous[signal.SIGWINCH] = signal.signal(signal.SIGWINCH, resize)
+        tty.setraw(source)
+        child = subprocess.Popen(argv, cwd=workspace, env=env,
+                                 stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
         os.close(slave)
         slave = None
-        previous[signal.SIGWINCH] = signal.signal(signal.SIGWINCH, resize)
-        for sig in (signal.SIGTERM, signal.SIGHUP):
-            previous[sig] = signal.signal(sig, terminate)
-        tty.setraw(sys.stdin.fileno())
-        aliases = CommandAliases()
         while True:
-            ready, _, _ = select.select([sys.stdin.fileno(), master], [], [], .25)
-            if not ready:
-                pending = aliases.flush_escape()
-                if pending:
-                    os.write(master, pending)
-            if master in ready:
-                try:
-                    data = os.read(master, 65536)
-                except OSError as exc:
-                    if exc.errno != errno.EIO:
-                        raise
-                    break
-                if not data:
-                    break
-                os.write(sys.stdout.fileno(), data)
-            if sys.stdin.fileno() in ready:
-                data = os.read(sys.stdin.fileno(), 65536)
-                if not data:
-                    child.send_signal(signal.SIGHUP)
-                    break
-                mapped = aliases.feed(data)
-                if mapped:
-                    os.write(master, mapped)
-            if child.poll() is not None and master not in ready:
+            ready, _, _ = select.select([master, source], [], [], .05)
+            if master in ready and not copy_output():
                 break
+            if source in ready:
+                data = os.read(source, 65536)
+                if not data:
+                    break
+                if display is None:
+                    send(data)
+                    continue
+                for submit, packet in packets.feed(data):
+                    if submit and display is not None:
+                        refresh_composer()
+                        packet = display.submission(packet)
+                    send(packet)
+            elif packets.pending:
+                send(packets.flush_escape())
+            if child.poll() is not None and not ready:
+                break
+        write(hint.finish())
         return child.wait()
     finally:
-        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, original)
         if child is not None and child.poll() is None:
             child.terminate()
             try:
                 child.wait(timeout=20)
             except subprocess.TimeoutExpired:
                 child.kill()
-                child.wait(timeout=10)
-        for sig, handler in previous.items():
-            signal.signal(sig, handler)
+                child.wait(timeout=5)
+        if saved_tty is not None:
+            with suppress(OSError, termios.error):
+                termios.tcsetattr(source, termios.TCSADRAIN, saved_tty)
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
         os.close(master)
         if slave is not None:
             os.close(slave)

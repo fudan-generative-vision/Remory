@@ -1,0 +1,108 @@
+{
+  "compressor": {
+    "architecture": "DFlash2Compressor",
+    "attention_layout": "four_local_source_reads_then_global_slot_only",
+    "candidate_selector": false,
+    "compression_ratio": 16,
+    "convolution_layout": "causal_groups_of_8_consecutive_slots_right_padded",
+    "dflash2": {
+      "block_size": 8,
+      "conv_group_size": 16,
+      "conv_kernel_size": 2,
+      "mask_token_id": 248070,
+      "selector_rank": 256,
+      "selector_top_k": 16,
+      "target_layer_ids": [
+        5,
+        19,
+        33,
+        47,
+        61
+      ]
+    },
+    "gradient_checkpointing": true,
+    "head_dim": 128,
+    "hidden_size": 5120,
+    "intermediate_size": 17408,
+    "layer_types": [
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention"
+    ],
+    "local_window": 2048,
+    "num_attention_heads": 32,
+    "num_hidden_layers": 5,
+    "num_key_value_heads": 8,
+    "output_embedding_rms": 0.012734529562294483,
+    "selected_source_width": 25600,
+    "slot_padding_side": "left",
+    "target_hidden_size": 5120,
+    "target_layer_ids": [
+      5,
+      19,
+      33,
+      47,
+      61
+    ]
+  },
+  "epochs": 1,
+  "seed": 20260917,
+  "optimizer": {
+    "betas": [
+      0.9,
+      0.95
+    ],
+    "eps": 1e-08,
+    "grad_accumulation": 8,
+    "learning_rate": 1e-05,
+    "moment_residency": "GPU_resident_full_replica",
+    "normalization": "scored_token_mean",
+    "type": "AdamW",
+    "warmup_steps": 500,
+    "weight_decay": 0.01,
+    "minimum_learning_rate": 1e-06,
+    "schedule": "linear_warmup_then_cosine_decay"
+  },
+  "objective": "full_vocabulary_reverse_KL_student_to_raw_teacher_T1_no_CE",
+  "position_weighting": {
+    "alpha": 1.0,
+    "coordinate": "original_source_offset_without_chunk_reset",
+    "formula": "(1+(1+p/64)^(-0.5))/full_response_mean",
+    "power": 0.5,
+    "tau": 64.0
+  },
+  "target_lora": false,
+  "target_trainable_parameters": 0,
+  "format_version": 1,
+  "schema": "qwen38_pretrained_dflash2_reconstruction_source_v2",
+  "repeat": {
+    "compression_ratio": 16,
+    "coverage": "each_selected_document_window_each_token_once_per_epoch",
+    "empty_thinking": true,
+    "fields": [
+      "long_document_window"
+    ],
+    "order": "length_buckets_interleaved_without_oversampling_seed_plus_epoch",
+    "source_block_tokens": 1024,
+    "source_chunk_tokens": 65536,
+    "student": "soft_tokens+prompt->response",
+    "target": "ALL_source_chunk_tokens_plus_im_end",
+    "target_context_tokens": 0,
+    "target_window_tokens": null,
+    "teacher": "raw_source+prompt->response"
+  },
+  "validation": {
+    "split": "validation",
+    "interval": 500,
+    "all_documents": true,
+    "final": true
+  },
+  "projection_tokens": 1024,
+  "offload_after_tokens": 131072,
+  "pretrained": {
+    "repository": "incoai/Qwen3.8-27B-DFlash2",
+    "revision": "015e795645c74b1a0eeef3b570031fb62e769bc5"
+  }
+}

@@ -1,16 +1,34 @@
-# Remory: Learning Residual Memory for Context Compaction
+<h1 align="center">REMORY</h1>
+
+<p align="center"><strong>Learning Residual Memory for Context Compaction</strong></p>
+
+<p align="center">
+  <a href="https://arxiv.org/abs/2610.11287"><img src="https://img.shields.io/badge/arXiv-2610.11287-bb9af7?style=flat-square&amp;logo=arxiv&amp;logoColor=white&amp;labelColor=1a1b26" alt="Paper on arXiv"></a>
+  <a href="https://github.com/fudan-generative-vision/Remory"><img src="https://img.shields.io/badge/GitHub-Code-7aa2f7?style=flat-square&amp;logo=github&amp;logoColor=white&amp;labelColor=1a1b26" alt="Code on GitHub"></a>
+  <a href="#models"><img src="https://img.shields.io/badge/Hugging_Face-Models-e0af68?style=flat-square&amp;logo=huggingface&amp;logoColor=white&amp;labelColor=1a1b26" alt="Models on Hugging Face"></a>
+</p>
 
 **Remory** supplements an agent's compaction summary with learned soft memory
 from its history. The memory is conditioned on the summary and appended after
 it, helping the frozen model continue its work across compactions.
 
-[📄 **Paper**](https://arxiv.org/pdf/2610.11287) |
-[💻 **Code**](https://github.com/1ring2rta/Remory) |
-[🤗 **Models**](#models)
+## News
 
-https://github.com/user-attachments/assets/3597f7ec-9212-4c59-af94-7d18a053f234
+- **2026-10-31** — **29.3328 on ASI-Bench with just Qwen3.8-27B + REMORY-1.9B!**
+  Our small open model surpasses the [published scores](https://asibench.apexin.ai/leaderboard/)
+  of trillion-parameter models **Kimi-K2.7 (27.34), DeepSeek-V4-Pro (24.98),
+  and MiMo-V2.5-Pro (23.25)**.
+  [Scored result](assets/asi-bench-result.pdf) · [Comparison sources](assets/README.md#asi-bench-result).
 
-<sub>Music: <a href="https://www.scottbuckley.com.au/library/electric-dreams/">Electric Dreams</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="assets/README.md#demo">Edit details</a></sub>
+- **2026-10-18** — **Online training in r-codex:** `/remory train` learns from
+  ongoing Qwen sessions; `/remory load` opens the memory-checkpoint picker.
+  Use `/remory status` to follow progress and `/remory stop` to save and stop.
+  Qwen stays frozen; selected memory weights apply at the next successful
+  compaction. [Setup and commands](integrations/codex/online-training.md).
+
+https://github.com/user-attachments/assets/b83e4d92-2b32-4f7c-9a8e-cb7e44078955
+
+<sub>Music: <a href="https://www.scottbuckley.com.au/library/electric-dreams/">Electric Dreams</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="NOTICES.md#video-credits">Credits</a></sub>
 
 ![Remory: summary-conditioned residual memory alongside standard Codex compaction, with training curves from the paper.](assets/remory.png)
 
@@ -18,7 +36,7 @@ https://github.com/user-attachments/assets/3597f7ec-9212-4c59-af94-7d18a053f234
 
 | Base model | Memory checkpoint | Deployment |
 | --- | --- | --- |
-| Qwen3.8-27B | [Qwen3.8-27B-REMORY-1.9B](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B) | SGLang, Transformers |
+| Qwen3.8-27B | [Qwen3.8-27B-REMORY-1.9B](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B) | [SGLang](docs/deployment.md#launch), [Transformers](docs/deployment.md#transformers) |
 | GLM-5.3-Flash | [GLM-5.3-Flash-REMORY-1.24B](https://huggingface.co/mocoV3/GLM-5.3-Flash-REMORY-1.24B) | [SGLang](docs/deployment.md#glm-53-flash) |
 
 The GLM release is the 1.24B checkpoint used in local evaluations, distinct from
@@ -74,6 +92,14 @@ This opens the native Codex UI with Remory compaction. Use `/compact` during a
 session and `r-codex resume --last` to return later. Codex is installed on first
 use. See [Codex](integrations/codex) for sessions, sub-agents, and MCP tools.
 
+For web search and document tools, enable
+`--research-tools`. This requires **`SERPER_API_KEY`** and **`MINERU_API_KEY`**
+(`MINERU_API_TOKEN` is also accepted), plus the separate Docling/MinerU tool
+environment. Run `r-codex tools` to check your setup. See
+[research tools and API keys](integrations/codex/README.md#research-tools-and-api-keys)
+for installation and configuration; local chat and shell/file tools need no
+external API key.
+
 ### Generate and compact through the API
 
 ```bash
@@ -127,6 +153,14 @@ Save the checkpoint with the conversation. For the next compaction, pass it as
 `.remory/memory.sqlite`. The [Codex integration](integrations/codex) provides a
 complete Responses provider and an interactive launcher.
 See the [API reference](docs/api.md) for native SGLang requests with memory.
+
+## Training
+
+The [Qwen3.8-27B training guide](training) includes the Stage I reconstruction
+trainer, Stage II summary-conditioned residual-memory trainer, four-GPU launch
+commands, and checkpoint/resume instructions. Both stages freeze Qwen and train
+only the memory network. [Synthetic JSONL examples](training/examples) show the
+document and history/summary/continuation formats, with CPU preparation commands.
 
 ## Results
 
