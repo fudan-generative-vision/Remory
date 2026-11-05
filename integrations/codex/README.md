@@ -32,6 +32,47 @@ Use `/compact` in the UI to create a summary and residual memory. Automatic
 compaction uses the context capacity reported by the server. A failed summary
 or encode leaves the existing context intact.
 
+## Agentic compaction (per session)
+
+Enter `/agentic_compact` to enable message folding for the current session.
+`/agentic_compact status` reports the setting; `/agentic_compact off` restores
+standard Remory compaction. The setting persists when this session is resumed.
+Enabling it does not compact immediately or change the automatic threshold.
+Subsequent `/compact` and automatic compactions use the same folding path.
+
+At that boundary, a temporary local Codex director uses native `spawn_agent`
+with `fork_context=false`. Its organizer receives access to a deep copy of the
+messages through four restricted tools: inspect, test, commit, and abort.
+It uses the session's Remory model and reasoning setting. The director only
+coordinates native tools; it does not make model calls or use a logged-in
+Codex account. This organizer is a child of the temporary director, not an
+extra research worker in the interactive thread.
+
+The organizer proposes ordered replacements of assistant spans or entire tool
+exchanges, with a factual summary for every removed span. User/system messages
+are immutable; partial tool exchanges and untested candidates are rejected.
+The parent revalidates the edit plan, encodes the **folded copy** as REMORY
+residual memory, and durably saves the checkpoint before replacing its context.
+Existing parent memory and completed regular-child memories are included in
+the encode; the organizer's scratch conversation is not. Native `close_agent`
+then closes the organizer, and its temporary home and transcript are removed.
+The organizer creates no persistent residual checkpoint of its own.
+
+Failures before commit retain the parent history. A failed close terminates the
+isolated runtime and records a cleanup warning without invalidating a committed
+parent checkpoint. Failed deletion of an uncommitted allocation records its
+handle in the session provider directory for cleanup. Saved folding receipts
+include the model, reasoning setting, source digest, edits and native thread IDs.
+Structural checks cannot prove the semantic accuracy of an AI-generated summary.
+
+The pinned upstream TUI does not register additional bare slash commands.
+r-codex translates `/agentic_compact` at a fresh input boundary to a
+`[Remory session] /agentic_compact` control message. Only an exact command in
+the interactive thread's latest user input changes the setting; quoted history,
+tool results and organizer messages cannot do so. The provider acknowledges it
+without a model call. Start or resume through the updated r-codex
+launcher to load the command; already-running terminal processes are unchanged.
+
 ## Resume
 
 ```bash

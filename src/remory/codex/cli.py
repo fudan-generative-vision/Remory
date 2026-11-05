@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import re
 import secrets
-import signal
 import socket
 import subprocess
 import sys
@@ -19,6 +18,7 @@ import httpx
 
 from .install import ensure_codex
 from .provider import Provider, atomic_json, create_app
+from .terminal import run_terminal
 
 
 def data_root():
@@ -145,31 +145,6 @@ def serve(provider, token):
         listener.close()
 
 
-def run_terminal(command, workspace, env):
-    child = None
-    previous = {}
-    def terminate(signum, frame):
-        if child is not None and child.poll() is None:
-            child.send_signal(signum)
-        raise KeyboardInterrupt
-    try:
-        previous[signal.SIGINT] = signal.signal(signal.SIGINT, lambda *_: None)
-        for sig in (signal.SIGTERM, signal.SIGHUP):
-            previous[sig] = signal.signal(sig, terminate)
-        child = subprocess.Popen(command, cwd=workspace, env=env)
-        return child.wait()
-    finally:
-        if child is not None and child.poll() is None:
-            child.terminate()
-            try:
-                child.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait(timeout=10)
-        for sig, handler in previous.items():
-            signal.signal(sig, handler)
-
-
 def run(args):
     root = data_root().resolve()
     resuming = args.action == 'resume'
@@ -247,6 +222,9 @@ def run(args):
             (directory / '.codex/config.toml').write_text('\n'.join(
                 f'{k} = {toml(v)}' for k, v in runtime.items()) + '\n')
             (directory / '.codex/config.toml').chmod(0o600)
+            from .native_folding import NativeFolder
+            provider.folder = NativeFolder(binary, runtime, env, provider)
+            provider.session_commands = True
             manifest.update(identity=info['identity'], model=config['target_model'], url=url,
                             updated_at=time.time(), status='running')
             atomic_json(directory / 'session.json', manifest)
@@ -264,6 +242,8 @@ def run(args):
             if args.prompt:
                 command.append(args.prompt)
             print(f'[r-codex] Resume later: r-codex resume {name}', flush=True)
+            print('[r-codex] /agentic_compact enables isolated message folding for this session '
+                  '(off/status supported).', flush=True)
             try:
                 return run_terminal(command, workspace, env)
             finally:
