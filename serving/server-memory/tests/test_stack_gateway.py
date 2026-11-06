@@ -585,3 +585,158 @@ def test_stateless_remote_does_not_lower_full_backend_residual_capacity_metadata
                 assert {k: remote_info[k] for k in limits} == dict(zip(limits, (2, 2000, 4000, 1000)))
                 assert remote_info["stateless_only"] is True
     asyncio.run(check())
+
+
+def tensor_recover_payload():
+    return {"input_ids": [1, 2, 3], "cache_policy": "bypass", "custom_logit_processor": "fixture-noop",
+            "sampling_params": {"custom_params": {
+        "specforge_context_compressor": {"version": 1, "mode": "recover",
+            "memory_positions": [1], "memory_embeddings": [[0.25, -0.5]]}}}}
+
+
+def enable_tensor_recover(app, remote):
+    remote.capabilities.extend(["qwen38_residual_cpu_concurrent_v1", "request_cache_bypass_v1"])
+    backend = app[APP_KEY].backends[1]
+    backend.allow_tensor_recover = True
+    backend.tensor_recover_artifact_identity = dict(remote.artifact)
+
+
+def test_verified_tensor_recover_can_use_opted_in_remote_while_encode_stays_local(tmp_path):
+    async def check():
+        local, remote = PortableServer(), PortableServer(compressor="d", contract="e")
+        local.external = 1
+        async with listen(local.app()) as a, listen(remote.app()) as b:
+            app = stateless_app(tmp_path, local, [a, b])
+            enable_tensor_recover(app, remote)
+            async with listen(app) as proxy, aiohttp.ClientSession() as client:
+                await until(lambda: app[APP_KEY].backends[1].healthy)
+                payload = tensor_recover_payload()
+                response = await client.post(proxy + "/generate", json=payload)
+                assert response.status == 200 and response.headers["X-SGLang-Backend"] == "gpu1"
+                assert remote.calls[0][1]["sampling_params"] == payload["sampling_params"]
+                info = await (await client.get(proxy + "/backends/gpu1/get_server_info")).json()
+                assert info["remory_artifact_identity"] == remote.artifact
+                assert info["tensor_recover_only"] is True and info["request_capabilities"] == []
+                encode = tensor_recover_payload()
+                encode["sampling_params"]["custom_params"]["specforge_context_compressor"]["mode"] = "encode"
+                pending = asyncio.create_task(client.post(proxy + "/groups/encode/generate", json=encode))
+                try:
+                    await until(lambda: app[APP_KEY].queue.pending == 1)
+                    assert len(remote.calls) == 1
+                    local.external = 0
+                    response = await pending
+                    assert response.status == 200 and response.headers["X-SGLang-Backend"] == "gpu0"
+                finally:
+                    if not pending.done():
+                        pending.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await pending
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("variant", ["opt_out", "missing_capability", "encoder_version", "encode", "handle",
+                                     "extra_field", "nan", "ragged", "bad_position", "cache", "batch", "no_processor"])
+def test_tensor_recover_exception_rejects_unverified_or_stateful_requests(tmp_path, variant):
+    async def check():
+        local, remote = PortableServer(), PortableServer(compressor="d", contract="e")
+        async with listen(local.app()) as a, listen(remote.app()) as b:
+            app = stateless_app(tmp_path, local, [a, b])
+            enable_tensor_recover(app, remote)
+            if variant == "opt_out":
+                app[APP_KEY].backends[1].allow_tensor_recover = False
+            if variant == "missing_capability":
+                remote.capabilities.remove("request_cache_bypass_v1")
+            payload = tensor_recover_payload()
+            custom = payload["sampling_params"]["custom_params"]
+            recover = custom["specforge_context_compressor"]
+            if variant == "encoder_version":
+                custom["remory_encoder_version"] = "local-v2"
+            elif variant == "encode":
+                recover["mode"] = "encode"
+            elif variant == "handle":
+                recover["memory_handle"] = {}
+            elif variant == "extra_field":
+                recover["extra"] = True
+            elif variant == "nan":
+                recover["memory_embeddings"][0][0] = float("nan")
+            elif variant == "ragged":
+                recover["memory_positions"] = [1, 2]
+                recover["memory_embeddings"].append([0.1])
+            elif variant == "bad_position":
+                recover["memory_positions"] = [3]
+            elif variant == "cache":
+                payload["cache_policy"] = "soft_reuse"
+            elif variant == "batch":
+                payload["sampling_params"] = [payload["sampling_params"]]
+            elif variant == "no_processor":
+                payload.pop("custom_logit_processor")
+            async with listen(app) as proxy, aiohttp.ClientSession() as client:
+                await until(lambda: app[APP_KEY].backends[1].healthy)
+                response = await client.post(proxy + "/backends/gpu1/generate", json=payload)
+                assert response.status == 400
+                assert not remote.calls and not local.calls
+    asyncio.run(check())
+
+
+def test_tensor_recover_raw_artifact_pin_change_quarantines_remote(tmp_path):
+    async def check():
+        local, remote = PortableServer(), PortableServer(compressor="d", contract="e")
+        async with listen(local.app()) as a, listen(remote.app()) as b:
+            app = stateless_app(tmp_path, local, [a, b])
+            enable_tensor_recover(app, remote)
+            async with listen(app):
+                await until(lambda: app[APP_KEY].backends[1].healthy)
+                remote.artifact["compressor_sha256"] = "f" * 64
+                await app[APP_KEY].probe(app[APP_KEY].backends[1])
+                assert not app[APP_KEY].backends[1].healthy
+                assert "pinned raw artifact" in app[APP_KEY].backends[1].error
+                assert app[APP_KEY].backends[0].healthy
+    asyncio.run(check())
+
+
+def test_tensor_recover_configuration_requires_explicit_artifact_pin(tmp_path):
+    row = {"name": "remote", "url": "http://localhost:1", "model": "public", "max_inflight": 1,
+           "stateless_only": True, "local_checkpoint": str(tmp_path), "allow_tensor_recover": True}
+    with pytest.raises(ValueError, match="exact tensor_recover_artifact_identity pin"):
+        config(tmp_path, [], backends=[row])
+    identity = {"schema": "remory_artifact_identity_v1", "compressor_sha256": "a" * 64,
+                "contract_sha256": "b" * 64, "target_metadata_sha256": "c" * 64}
+    row["tensor_recover_artifact_identity"] = identity
+    assert config(tmp_path, [], backends=[row])["backends"][0]["allow_tensor_recover"] is True
+    with pytest.raises(ValueError, match="exact tensor_recover_artifact_identity pin"):
+        config(tmp_path, [], backends=[{**row, "stateless_only": False}])
+    with pytest.raises(ValueError, match="allow_tensor_recover must be boolean"):
+        config(tmp_path, [], backends=[{**row, "allow_tensor_recover": "true"}])
+
+
+def test_verified_remote_recover_strips_encoder_version_only_on_remote_dispatch(tmp_path):
+    async def check():
+        local, remote = PortableServer(), PortableServer(compressor="d", contract="e")
+        async with listen(local.app()) as a, listen(remote.app()) as b:
+            app = stateless_app(tmp_path, local, [a, b])
+            enable_tensor_recover(app, remote)
+            async with listen(app) as proxy, aiohttp.ClientSession() as client:
+                await until(lambda: app[APP_KEY].backends[1].healthy)
+                payload = tensor_recover_payload()
+                custom = payload["sampling_params"]["custom_params"]
+                version = "f" * 64
+                custom["remory_encoder_version"] = version
+                response = await client.post(proxy + "/backends/gpu1/generate", json=payload)
+                assert response.status == 200
+                assert response.headers["X-Remory-Encoder-Version-Handling"] == "ignored-for-tensor-recover"
+                remote_custom = remote.calls[0][1]["sampling_params"]["custom_params"]
+                assert "remory_encoder_version" not in remote_custom
+                assert remote_custom["specforge_context_compressor"] == custom["specforge_context_compressor"]
+                response = await client.post(proxy + "/backends/gpu0/generate", json=payload)
+                assert response.status == 200
+                assert "X-Remory-Encoder-Version-Handling" not in response.headers
+                assert local.calls[0][1]["sampling_params"]["custom_params"] == custom
+                # The same version never grants a remote encode or ordinary request.
+                for next_custom in ({"remory_encoder_version": version},
+                        {**custom, "specforge_context_compressor": {
+                            **custom["specforge_context_compressor"], "mode": "encode"}}):
+                    response = await client.post(proxy + "/backends/gpu1/generate", json={
+                        **payload, "sampling_params": {"custom_params": next_custom}})
+                    assert response.status == 400
+                assert len(remote.calls) == 1 and len(local.calls) == 1
+    asyncio.run(check())

@@ -124,6 +124,24 @@ the normal queue. Lease renewal and handle release use pinned cleanup routes
 that remain available when inference capacity is full. References cannot be
 silently moved to another replica.
 
+A separately verified H20 replica may also read caller-provided REMORY tensors
+without owning the encoder or session. This requires `stateless_only: true`,
+`allow_tensor_recover: true`, and an exact `tensor_recover_artifact_identity`
+pin, in addition to the target identity anchor and required capabilities.
+Only self-contained, cache-bypassed `/generate` recovery with explicit tensor
+rows/positions and the required custom logit processor qualifies. Images and
+SSE can accompany that request; batched or stateful recovery does not qualify.
+The gateway strips the local encoder-version marker only from this verified
+remote recover dispatch. Encoding, local training-version selection, handles
+and session state remain local. A pin change quarantines the replica, and queued
+requests recheck identity and capabilities before dispatch.
+
+The [sanitized verification record](tensor-recovery-verification.json) includes
+a target-embedding injection control and actual 64×5120 compressed-memory
+text/image SSE checks. It establishes the tested tensor-input behavior, not
+compressor interchangeability or completed production rollout. See the
+[H20 handoff](h20-public-deployment.md) for the explicit configuration steps.
+
 ## Recovery and storage
 
 `REMORY_MEMORY_DIR` contains snapshots on the inference host. The dedicated

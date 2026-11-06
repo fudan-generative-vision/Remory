@@ -126,3 +126,32 @@ def test_memory_ticket_preserves_stateless_exclusion_during_queue_pumping():
         assert await memory.future is local
         queue.release(memory)
     asyncio.run(check())
+
+
+def test_queued_tensor_recover_rechecks_opt_in_identity_and_capabilities():
+    async def check():
+        identity = {"fixture": "verified"}
+        caps = ["qwen38_summary_residual_sglang_v1", "qwen38_residual_cpu_concurrent_v1", "request_cache_bypass_v1"]
+        local = Backend("local", "http://local", "model", 1, healthy=True, observed_load=1)
+        remote = Backend("remote", "http://remote", "model", 1, healthy=True, observed_load=1,
+                         stateless_only=True, allow_tensor_recover=True, tensor_recover_artifact_identity=identity,
+                         info={"remory_artifact_identity": dict(identity), "request_capabilities": list(caps)})
+        queue = AdmissionQueue([local, remote])
+        ticket = queue.submit(group="recover", model="model", requires_full_backend=True, tensor_recover=True)
+        remote.observed_load = 0
+        remote.info["request_capabilities"] = []
+        queue.pump()
+        assert ticket.backend is None
+        remote.info["request_capabilities"] = caps
+        remote.info["remory_artifact_identity"] = {"fixture": "changed"}
+        queue.pump()
+        assert ticket.backend is None
+        remote.info["remory_artifact_identity"] = dict(identity)
+        remote.allow_tensor_recover = False
+        queue.pump()
+        assert ticket.backend is None
+        remote.allow_tensor_recover = True
+        queue.pump()
+        assert await ticket.future is remote
+        queue.release(ticket)
+    asyncio.run(check())

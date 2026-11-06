@@ -222,10 +222,27 @@ H20 主动连出的加密隧道。不能把 API key 发到该 HTTP 网页代理�
 ## 加入本机统一池
 
 若远端的基础模型相同，但 REMORY contract identity 尚未与本地对齐，可显式用
-`--stateless-only` 加入普通推理池。网关仍校验目标模型 metadata 和 dtype/量化身份，
-并禁止把 memory、encode、会话状态及本地 encoder version 请求送到该后端。
-这不表示远端 REMORY 兼容；需要对齐真实契约后才能取消此限制。远端未共享本地
-训练版本目录时，配置 `supports_local_encoder_versions: false`，保留本地版本路由。
+`--stateless-only` 加入普通推理池。网关仍校验目标模型 metadata 和 dtype/量化身份。
+默认不向该后端发送 memory、encode、会话状态或本地 encoder version 请求。
+远端未共享本地训练版本目录时，配置 `supports_local_encoder_versions: false`。
+
+普通研究 decode 也可能携带已经压缩的 REMORY 张量，所以仅加入普通无状态池
+不足以分担这类请求。完成目标 embedding 注入及真实压缩张量的 text/image SSE
+验证后，可在生成的后端配置中显式设置 `allow_tensor_recover: true`，并把实测远端
+原始 `remory_artifact_identity` 对象原样填入 `tensor_recover_artifact_identity`。
+保留 `stateless_only: true` 及本地 checkpoint 身份锚点；不能根据基础模型名称推断此 pin。
+`add_remote_backend.py` 仍只生成默认受限配置，这两个字段需要在验证后显式添加。
+
+该例外只允许 `/generate`、`cache_policy: bypass`、完整显式 tensor rows/positions、
+指定 custom logit processor 的单请求 recover；batch、encode、handle、session、
+未知 memory 字段和未通过身份/capability 检查的后端仍不可远程分配。只有该远端
+recover 分发副本会移除 `remory_encoder_version`，因为 recover 不选择编码器；
+原请求、本地 recover、encode 和本地在线训练版本注册表保持原有语义。
+张量由调用方提供，编码和有状态记忆仍留在本地，不宣称远端能够替代本地 compressor。
+
+[脱敏验收记录](tensor-recovery-verification.json) 记录了 RED embedding 注入对照，
+以及 64×5120 压缩张量的 text/image SSE 验证。这些是指定后端的定向兼容性观察，
+不是任意模型兼容证明或上线完成记录；候选网关验收和生产 rollout 需另外确认。
 已明确授权 HTTP 平台入口时可传 `--allow-http`；默认仍要求 HTTPS。
 
 将远端 key 保存为本机权限 600 的私密文件。然后在本机此仓库中生成新配置：

@@ -27,6 +27,16 @@ class Backend:
     # Remote replicas may share base weights without sharing this registry.
     supports_local_encoder_versions: bool = True
     stateless_only: bool = False
+    allow_tensor_recover: bool = False
+    tensor_recover_artifact_identity: dict[str, Any] | None = None
+
+    @property
+    def can_route_tensor_recover(self):
+        return (self.stateless_only and self.allow_tensor_recover
+                and self.tensor_recover_artifact_identity is not None
+                and self.info.get("remory_artifact_identity") == self.tensor_recover_artifact_identity
+                and {"qwen38_summary_residual_sglang_v1", "qwen38_residual_cpu_concurrent_v1",
+                     "request_cache_bypass_v1"}.issubset(self.info.get("request_capabilities", [])))
 
     @property
     def can_route_local_encoder_versions(self):
@@ -51,6 +61,7 @@ class Ticket:
     released: bool = False
     requires_local_encoder_versions: bool = False
     requires_full_backend: bool = False
+    tensor_recover: bool = False
 
 
 class QueueFull(Exception):
@@ -70,14 +81,15 @@ class AdmissionQueue:
         return sum(len(group) for group in self.groups.values())
 
     def submit(self, *, group, model, pinned=None, units=1, requires_local_encoder_versions=False,
-               requires_full_backend=False):
+               requires_full_backend=False, tensor_recover=False):
         if type(units) is not int or units < 1:
             raise ValueError("request units must be a positive integer")
         if self.closed:
             raise RuntimeError("gateway is draining")
         candidates = [b for b in self.backends if b.model == model and
                       (pinned is None or b.name == pinned) and
-                      (not requires_full_backend or not b.stateless_only) and
+                      (not requires_full_backend or not b.stateless_only
+                       or tensor_recover and b.can_route_tensor_recover) and
                       (not requires_local_encoder_versions or b.can_route_local_encoder_versions)]
         if requires_local_encoder_versions and not candidates:
             raise ValueError("no matching backend supports the local remory_encoder_version registry")
@@ -89,7 +101,7 @@ class AdmissionQueue:
             raise QueueFull("request queue is full")
         ticket = Ticket(group, model, pinned, units, asyncio.get_running_loop().create_future(),
                         requires_local_encoder_versions=requires_local_encoder_versions,
-                        requires_full_backend=requires_full_backend)
+                        requires_full_backend=requires_full_backend, tensor_recover=tensor_recover)
         self.groups.setdefault(group, deque()).append(ticket)
         self.pump()
         return ticket
@@ -105,7 +117,8 @@ class AdmissionQueue:
                 available = [b for b in self.backends if b.healthy
                              and b.model == ticket.model
                              and (ticket.pinned is None or b.name == ticket.pinned)
-                             and (not ticket.requires_full_backend or not b.stateless_only)
+                             and (not ticket.requires_full_backend or not b.stateless_only
+                                  or ticket.tensor_recover and b.can_route_tensor_recover)
                              and (not ticket.requires_local_encoder_versions
                                   or b.can_route_local_encoder_versions)
                              and b.load + ticket.units <= b.capacity]

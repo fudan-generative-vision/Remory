@@ -81,6 +81,16 @@ def load_config(path):
             raise ValueError("stateless_only must be boolean")
         if backend.get("stateless_only") and not backend.get("local_checkpoint"):
             raise ValueError("stateless_only requires a local_checkpoint base identity anchor")
+        if not isinstance(backend.get("allow_tensor_recover", False), bool):
+            raise ValueError("allow_tensor_recover must be boolean")
+        if backend.get("allow_tensor_recover"):
+            identity = backend.get("tensor_recover_artifact_identity")
+            if (not backend.get("stateless_only") or not isinstance(identity, dict)
+                    or set(identity) != {"schema", "compressor_sha256", "contract_sha256", "target_metadata_sha256"}
+                    or identity["schema"] != "remory_artifact_identity_v1"
+                    or any(not isinstance(v, str) or not re.fullmatch(r"[0-9a-f]{64}", v)
+                           for k, v in identity.items() if k != "schema")):
+                raise ValueError("allow_tensor_recover requires stateless_only and an exact tensor_recover_artifact_identity pin")
         backend["url"] = url
         names.add(name)
         urls.add(url)
@@ -156,6 +166,57 @@ def memory_capability(capability):
     return any(part in capability for part in ("remory", "residual", "memory", "compress", "hidden_state", "handle", "session"))
 
 
+def is_tensor_recover(path, data):
+    """Recognize only self-contained, cache-free native tensor recovery.
+
+    The target scatters these caller-supplied rows; the compressor hook's
+    all-recover branch is a no-op. Unknown modes/fields and batched requests
+    retain the ordinary full-backend restriction.
+    """
+    if path != "/generate" or data.get("cache_policy") != "bypass" or needs_pin(path, data):
+        return False
+    # SGLang transports custom_params into ForwardBatch only with this
+    # processor; otherwise the caller's tensor could be silently omitted.
+    if not isinstance(data.get("custom_logit_processor"), str) or not data["custom_logit_processor"]:
+        return False
+    sampling = data.get("sampling_params")
+    if not isinstance(sampling, dict):
+        return False
+    custom = sampling.get("custom_params")
+    key = "specforge_context_compressor"
+    if not isinstance(custom, dict) or not isinstance(custom.get(key), dict):
+        return False
+    payload = custom[key]
+    if (set(payload) != {"version", "mode", "memory_positions", "memory_embeddings"}
+            or type(payload["version"]) is not int or payload["version"] != 1
+            or payload["mode"] != "recover"):
+        return False
+    ids, positions, rows = data.get("input_ids"), payload["memory_positions"], payload["memory_embeddings"]
+    if (not isinstance(ids, list) or not ids or any(type(v) is not int or v < 0 for v in ids)
+            or not isinstance(positions, list) or not positions
+            or any(type(v) is not int or not 0 <= v < len(ids) for v in positions)
+            or any(a >= b for a, b in zip(positions, positions[1:]))
+            or not isinstance(rows, list) or len(rows) != len(positions)
+            or not isinstance(rows[0], list) or not rows[0]):
+        return False
+    width = len(rows[0])
+    if any(not isinstance(row, list) or len(row) != width
+           or any(type(v) not in (int, float) or not -1e308 <= v <= 1e308
+                  or not math.isfinite(v) for v in row) for row in rows):
+        return False
+    version_key = "remory_encoder_version"
+    if version_key in custom and (not isinstance(custom[version_key], str)
+                                 or not re.fullmatch(r"[0-9a-f]{64}", custom[version_key])):
+        return False
+    # Remove only the precisely validated recover payload for classification.
+    # VersionedResidualHook selects an encoder only for mode=encode; this
+    # validated recover payload cannot consult the local version registry.
+    # Other memory/session/version fields still require a full backend.
+    remainder = {**data, "sampling_params": {**sampling, "custom_params": {
+        k: v for k, v in custom.items() if k not in {key, version_key}}}}
+    return not needs_full_backend(path, remainder)
+
+
 def needs_pin(path, data):
     # Native custom_params holds handles below sampling_params, including
     # batched requests. Check before dispatch; never balance an owned tensor.
@@ -181,7 +242,9 @@ class Gateway:
         self.config, self.api_key = config, api_key
         self.backends = [Backend(row["name"], row["url"], row["model"], row["max_inflight"],
                                  supports_local_encoder_versions=row.get("supports_local_encoder_versions", True),
-                                 stateless_only=row.get("stateless_only", False))
+                                 stateless_only=row.get("stateless_only", False),
+                                 allow_tensor_recover=row.get("allow_tensor_recover", False),
+                                 tensor_recover_artifact_identity=row.get("tensor_recover_artifact_identity"))
                          for row in config["backends"]]
         self.settings = {row["name"]: row for row in config["backends"]}
         self.queue = AdmissionQueue(self.backends, max_pending=config["max_pending"])
@@ -230,6 +293,8 @@ class Gateway:
         expected_factory = "context_compression.qwen38_residual_sglang_hook:make_summary_residual_compressor_hook"
         if backend.stateless_only and (artifact is None or local is None):
             raise ValueError("stateless_only requires portable identity and a local checkpoint anchor")
+        if backend.allow_tensor_recover and artifact != backend.tensor_recover_artifact_identity:
+            raise ValueError("tensor recover backend differs from its pinned raw artifact identity")
         if artifact is None and local is not None:
             if (len(hooks) != 1 or hooks[0].get("hook_factory") != expected_factory
                     or str(Path(hooks[0].get("config", {}).get("checkpoint", "")).resolve()) != local["checkpoint"]
@@ -434,6 +499,7 @@ class Gateway:
                 info["served_model_name"] = metadata_backend.model
                 if metadata_backend.stateless_only:
                     info["stateless_only"] = True
+                    info["tensor_recover_only"] = metadata_backend.can_route_tensor_recover
                     info["request_capabilities"] = []
                     info.pop("specforge_gpu_memory_handle", None)
                 # This capability is routable when at least one eligible
@@ -474,6 +540,7 @@ class Gateway:
                     info["shared_gateway"] = {"backends": [b.name for b in choices],
                                               "max_inflight": sum(b.capacity for b in choices),
                                               "stateless_only_backends": [b.name for b in choices if b.stateless_only],
+                                              "tensor_recover_backends": [b.name for b in choices if b.can_route_tensor_recover],
                                               "memory_backends": [dict(name=b.name, load=b.load, capacity=b.capacity)
                                                   for b in full_choices if "remory_server_memory_v1" in b.info.get("request_capabilities", [])]}
                 return web.json_response(info)
@@ -529,6 +596,9 @@ class Gateway:
             units = request_units(path, data)
             requires_local_encoder_versions = needs_local_encoder_versions(data)
             requires_full_backend = needs_full_backend(path, data)
+            tensor_recover = is_tensor_recover(path, data)
+            if tensor_recover:
+                requires_local_encoder_versions = False
             if path == "/generate":
                 rid = data.get("rid")
                 if units > 1:
@@ -555,7 +625,7 @@ class Gateway:
             else:
                 ticket = self.queue.submit(group=group, model=model, pinned=pinned, units=units,
                                            requires_local_encoder_versions=requires_local_encoder_versions,
-                                           requires_full_backend=requires_full_backend)
+                                           requires_full_backend=requires_full_backend, tensor_recover=tensor_recover)
                 backend = await asyncio.wait_for(asyncio.shield(ticket.future), self.config["queue_timeout"])
             waited = time.monotonic() - started
             # OpenAI public aliases map to the backend's own served model name.
@@ -565,15 +635,28 @@ class Gateway:
                 native_ids = [owned_rid]
             headers = {"Content-Type": "application/json", "Accept-Encoding": "identity",
                        **self.upstream_headers(backend, group)}
+            outbound = data
+            version_headers = {}
+            if backend.stateless_only and tensor_recover:
+                sampling = data["sampling_params"]
+                custom = sampling["custom_params"]
+                if "remory_encoder_version" in custom:
+                    # Preserve the original request/provenance. Strip only on
+                    # the verified remote recover dispatch, never local encode
+                    # or local recovery, and never ordinary versioned requests.
+                    outbound = {**data, "sampling_params": {**sampling, "custom_params": {
+                        k: v for k, v in custom.items() if k != "remory_encoder_version"}}}
+                    version_headers["X-Remory-Encoder-Version-Handling"] = "ignored-for-tensor-recover"
             # Preserve SSE bytes, status and content type. No retry/failover
             # occurs after dispatch, including before the first response byte.
             async with asyncio.timeout(self.config["request_timeout"]), self.session.request(request.method, backend.url + path,
-                    params=request.query, data=json.dumps(data).encode(), headers=headers,
+                    params=request.query, data=json.dumps(outbound).encode(), headers=headers,
                     allow_redirects=False) as upstream:
                 response = web.StreamResponse(status=upstream.status, headers={
                     "Content-Type": upstream.headers.get("Content-Type", "application/json"),
                     "X-SGLang-Backend": backend.name, "X-Queue-Wait-Seconds": f"{waited:.6f}",
                     "Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+                    **version_headers,
                     **{k: upstream.headers[k] for k in ("Content-Encoding", "Retry-After") if k in upstream.headers},
                 })
                 await response.prepare(request)

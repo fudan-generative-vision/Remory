@@ -1,0 +1,80 @@
+{
+  "schema": "remory_tensor_recovery_verification_v1",
+  "verification_date": "2026-11-06",
+  "scope": "Controlled endpoint probes; not a production rollout attestation or general compressor equivalence claim.",
+  "remote_artifact_identity": {
+    "schema": "remory_artifact_identity_v1",
+    "compressor_sha256": "59d36bcec81c44bb314b63afea4dae79d8cda53a8918a5364143d8ecb2a499e5",
+    "contract_sha256": "29dc20537a10309f63077dc41c8bb7020fbfe22c8074c1e94817e90b697d8654",
+    "target_metadata_sha256": "68dca6ab72fe8b44b54228bb020909c54ef960d6d8a779fbeff72bcdaa27e08c"
+  },
+  "embedding_control": {
+    "success": true,
+    "remote_injects_tensor": true,
+    "remote_vs_discrete_control_logprob_max_error": 0.0,
+    "cases": [
+      {
+        "name": "remote-blue",
+        "http_status": 200,
+        "output": "BLUE"
+      },
+      {
+        "name": "remote-scatter-red",
+        "http_status": 200,
+        "output": "RED"
+      },
+      {
+        "name": "remote-red-control",
+        "http_status": 200,
+        "output": "RED"
+      },
+      {
+        "name": "local-scatter-red",
+        "http_status": 200,
+        "output": "RED"
+      }
+    ]
+  },
+  "compressed_memory_sse": {
+    "success": true,
+    "cases": [
+      {
+        "kind": "text_memory",
+        "success": true,
+        "http_status": 200,
+        "memory_shape": [
+          64,
+          5120
+        ],
+        "sse_frames": 7,
+        "cache_policy": "bypass",
+        "finish_reason": "stop",
+        "synthetic_marker_recovered": true,
+        "synthetic_red_image_recognized": null
+      },
+      {
+        "kind": "image_memory",
+        "success": true,
+        "http_status": 200,
+        "memory_shape": [
+          64,
+          5120
+        ],
+        "sse_frames": 53,
+        "cache_policy": "bypass",
+        "finish_reason": "stop",
+        "synthetic_marker_recovered": true,
+        "synthetic_red_image_recognized": true
+      }
+    ]
+  },
+  "exclusions": [
+    "No endpoint addresses, credentials, request identifiers, session logs, absolute filesystem paths, weights or tensor contents are included."
+  ],
+  "limits": [
+    "The remote compressor and local online-training version registry are not interchangeable.",
+    "Only caller-provided, self-contained tensor recovery is eligible after explicit pinning.",
+    "Encoding, handles and session state remain local.",
+    "Production deployment is not asserted by this artifact."
+  ]
+}
