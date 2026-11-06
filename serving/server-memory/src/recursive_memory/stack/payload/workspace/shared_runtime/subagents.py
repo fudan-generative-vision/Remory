@@ -294,4 +294,3 @@ class SubagentGateway:
 def gateway_class():
     from terminal_bench_eval.codex_r2eact_gateway import CodexResponsesGateway
     return SubagentGateway if enabled() else CodexResponsesGateway
-

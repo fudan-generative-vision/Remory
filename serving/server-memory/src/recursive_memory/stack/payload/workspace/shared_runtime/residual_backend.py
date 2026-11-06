@@ -689,4 +689,3 @@ class ResidualBackend(LiveR2EActBackend):
 
     def prepare_tool_message_for_native_compaction(self, **kwargs):
         return self._prepare_tool_message(**kwargs, native_compaction_request=True)
-

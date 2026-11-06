@@ -178,4 +178,3 @@ class SubagentMemoryMixin:
     def _consume_prepared_folds(self, prepared):
         consumed = set(prepared.get("fold_ids", ()))
         self._folded_branches = [entry for entry in self._folded_branches if entry["fold_id"] not in consumed]
-

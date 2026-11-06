@@ -721,7 +721,7 @@
       "executable": false
     },
     "workspace/shared_runtime/residual_backend.py": {
-      "sha256": "3378aae8c8f34653e0675b52c6f9d9eae4588ffd95544d8c526513ea9c4de7eb",
+      "sha256": "aac6b8169054e4522ca98221142fe2f2df9f580b755d894d649ec73eaf11613f",
       "executable": false
     },
     "workspace/shared_runtime/residual_preflight.py": {
@@ -753,11 +753,11 @@
       "executable": false
     },
     "workspace/shared_runtime/subagent_memory.py": {
-      "sha256": "79c8407cf4b5812b2e3f043a155397d40173e66bc4baae34ef9eb50dc4b811fb",
+      "sha256": "9bb3926bd352e4ff382466ae7c75cd55a2001cbcd978f1356e9beb5f9a14aa44",
       "executable": false
     },
     "workspace/shared_runtime/subagents.py": {
-      "sha256": "6c708f14375b4b8c7d34669da053d411cdc088e55e9196912dbb51ec34e8f366",
+      "sha256": "3d98f9316549cf05fb772f3abe707f54b26aada9ab31e9c81375e00cff493ccd",
       "executable": false
     },
     "workspace/shared_runtime/summary_only_backend.py": {
