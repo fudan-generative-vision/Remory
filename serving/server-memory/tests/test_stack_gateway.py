@@ -550,3 +550,38 @@ def test_stateless_config_requires_explicit_boolean_and_checkpoint_anchor(tmp_pa
         with pytest.raises(ValueError, match=message):
             config(tmp_path, [], backends=[{"name": "remote", "url": "http://localhost:1",
                 "model": "public", "max_inflight": 1, "stateless_only": value}])
+
+
+def test_stateless_remote_does_not_lower_full_backend_residual_capacity_metadata(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    workspace = Path(__file__).resolve().parents[1] / "src/recursive_memory/stack/payload/workspace"
+    monkeypatch.syspath_prepend(str(workspace))
+    from shared_runtime.residual_preflight import assert_residual_concurrency
+
+    class LimitedServer(PortableServer):
+        async def info(self, request):
+            response = await super().info(request)
+            info = json.loads(response.text)
+            info.update(context_length=self.capacity * 1000,
+                        max_total_num_tokens=self.capacity * 2000,
+                        max_req_input_len=self.capacity * 500)
+            return web.json_response(info)
+
+    async def check():
+        local, remote = LimitedServer(), LimitedServer(compressor="d", contract="e")
+        local.capacity, remote.capacity = 4, 2
+        local.capabilities.append("qwen38_residual_cpu_concurrent_v1")
+        remote.capabilities = ["common"]
+        async with listen(local.app()) as a, listen(remote.app()) as b:
+            app = stateless_app(tmp_path, local, [a, b])
+            async with listen(app) as proxy, aiohttp.ClientSession() as client:
+                await until(lambda: app[APP_KEY].backends[1].healthy)
+                info = await (await client.get(proxy + "/get_server_info")).json()
+                limits = ("max_running_requests", "context_length", "max_total_num_tokens", "max_req_input_len")
+                assert {k: info[k] for k in limits} == dict(zip(limits, (4, 4000, 8000, 2000)))
+                assert_residual_concurrency(info, 4)
+                remote_info = await (await client.get(proxy + "/backends/gpu1/get_server_info")).json()
+                assert {k: remote_info[k] for k in limits} == dict(zip(limits, (2, 2000, 4000, 1000)))
+                assert remote_info["stateless_only"] is True
+    asyncio.run(check())

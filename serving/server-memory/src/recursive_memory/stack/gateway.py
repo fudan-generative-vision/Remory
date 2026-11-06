@@ -445,8 +445,12 @@ class Gateway:
                     capabilities.discard(version_capability)
                 info["request_capabilities"] = sorted(capabilities)
                 if not pinned:
+                    # These limits accompany the full backend's REMORY contract
+                    # above. Stateless replicas cannot run residual encoding and
+                    # must not lower its concurrency or token limits.
+                    limit_choices = full_choices or choices
                     for key in ("max_running_requests", "context_length", "max_total_num_tokens", "max_req_input_len"):
-                        values = [b.info.get(key) for b in choices]
+                        values = [b.info.get(key) for b in limit_choices]
                         if all(type(value) is int for value in values):
                             info[key] = min(values)
                     common = set(choices[0].info.get("request_capabilities", []))
