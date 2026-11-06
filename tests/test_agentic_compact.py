@@ -59,6 +59,22 @@ def test_fold_rejects_incomplete_data_and_untested_commit():
         state.test_transform([], 'No changes')
 
 
+def test_inspection_indices_and_editable_spans_preserve_complete_groups():
+    source = snapshot()
+    source['protected_boundaries'] = [3]
+    state = FoldState(source)
+    page = state.inspect_context('messages', limit=12000)
+    indexed = json.loads(page['text'])
+    assert [row['message_index'] for row in indexed] == list(range(len(source['messages'])))
+    assert [row['message'] for row in indexed] == source['messages']
+    assert page['pagination_unit'] == 'characters'
+    index = state.inspect_context('index')
+    assert index['editable_spans'] == [{'start': 1, 'end': 3}, {'start': 3, 'end': 4}]
+    for span in index['editable_spans']:
+        assert state.test_transform([{**span, 'text': 'Observed failure; fix remains pending.'}],
+                                    'Preserve original task and failed test.')['valid']
+
+
 def test_summary_contract_is_checked_before_candidate_commit():
     source = snapshot()
     source['summary_contract'] = {'output_schema': {'type': 'object',

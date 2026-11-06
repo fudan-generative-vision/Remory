@@ -205,3 +205,26 @@ def test_real_legacy_builder_with_fake_encode_only(tmp_path):
     assert second.receipt['cross_summary_reconditioning']
     assert second.receipt['source_memory_slots'] == len(first.embeddings)
     assert bridge.store.get('session', first.handle).handle == first.handle
+
+
+def test_explicit_compatible_identity_keeps_existing_handles(bridge):
+    from dataclasses import replace
+    from remory.codex.legacy_bridge import retain_compatible_identity
+    old = compact(bridge)
+    previous = {'config': deepcopy(bridge.model_config), 'identity': bridge.contract.identity}
+    bridge.contract = replace(bridge.contract, identity='a' * 64)
+    bridge.backend.contract = bridge.contract
+    retain_compatible_identity(bridge, previous)
+    result = bridge.generate(owner='session', handle=old.handle, continuation_ids=[7], max_new_tokens=3)
+    assert result.output_ids == [42]
+    assert bridge.backend.contract.identity == old.identity
+
+
+def test_compatible_identity_rejects_changed_memory_format(bridge):
+    from remory.codex.legacy_bridge import retain_compatible_identity
+    prior = {'config': deepcopy(bridge.model_config), 'identity': bridge.contract.identity}
+    prior['config']['residual']['compression_ratio'] = 99
+    before = bridge.contract
+    with pytest.raises(ValueError, match='incompatible'):
+        retain_compatible_identity(bridge, prior)
+    assert bridge.contract is before

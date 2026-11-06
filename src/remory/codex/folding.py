@@ -55,6 +55,11 @@ class FoldState:
         self._snapshot = deepcopy(snapshot)
         self._messages = self._snapshot['messages']
         self._units = message_units(self._messages)
+        self._boundaries = self._snapshot.get('protected_boundaries', [])
+        edges = {0, len(self._messages)} | {x for lo, hi, _ in self._units for x in (lo, hi)}
+        if not isinstance(self._boundaries, list) or any(type(x) is not int or x not in edges
+                                                       for x in self._boundaries):
+            raise ValueError('Protected boundaries must be complete message-unit edges')
         self._source_hash = digest(self._snapshot)
         self._candidates = {}
         self._result = None
@@ -80,16 +85,30 @@ class FoldState:
                           characters=len(_json(self._messages[start:end])))
                      for start, end, protected in self._units]
         elif target == 'messages':
-            value = self._messages
+            # Explicit indices avoid making the organizer count hundreds of
+            # nested message objects to map evidence back to an edit range.
+            value = [dict(message_index=index, message=message)
+                     for index, message in enumerate(self._messages)]
         elif target == 'context':
             value = {k: v for k, v in self._snapshot.items() if k != 'messages'}
         else:
             raise ValueError('Unknown inspection target')
         text = _json(value)
-        return dict(target=target, offset=offset, total_characters=len(text),
+        result = dict(target=target, offset=offset, total_characters=len(text),
                     text=text[offset:offset + limit],
                     next_offset=offset + limit if offset + limit < len(text) else None,
-                    snapshot_sha256=self._source_hash)
+                    snapshot_sha256=self._source_hash, pagination_unit='characters')
+        if target == 'index' and offset == 0:
+            spans = []
+            for start, end, protected in self._units:
+                if protected:
+                    continue
+                if spans and spans[-1]['end'] == start and start not in self._boundaries:
+                    spans[-1]['end'] = end
+                else:
+                    spans.append(dict(start=start, end=end))
+            result['editable_spans'] = spans
+        return result
 
     def test_transform(self, edits, summary):
         self._open()
@@ -120,6 +139,8 @@ class FoldState:
                 raise ValueError('Edit ranges must be ordered, nonoverlapping, and in bounds')
             if start not in boundaries or end not in boundaries:
                 raise ValueError('An edit cannot split a tool exchange')
+            if any(start < boundary < end for boundary in self._boundaries):
+                raise ValueError('An edit cannot cross an existing residual-memory boundary')
             if any(protected and start <= lo < end for lo, _, protected in self._units):
                 raise ValueError('User, system and developer messages are protected')
             if not isinstance(text, str) or not text.strip():

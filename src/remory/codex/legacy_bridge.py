@@ -4,6 +4,8 @@ This bridge owns new immutable checkpoints only. It does not import legacy
 session handles, load model weights, install hooks, or modify shared services.
 """
 from copy import deepcopy
+from dataclasses import replace
+import json
 from pathlib import Path
 import threading
 
@@ -125,6 +127,7 @@ class LegacyBridge(Remory):
                 raise RuntimeError('Legacy client returned inconsistent frontier size')
             receipt.update(schema='remory.legacy_bridge.compaction.v1', previous=previous,
                            branches=list(branches), bridge_identity=c.identity,
+                           encoder_checkpoint=self.backend.checkpoint,
                            legacy_endpoint=self.backend.client.base_url,
                            source_sha256=digest(source.input_ids))
             return self.store.put(owner=owner, identity=c.identity, prefix_ids=prefix,
@@ -148,6 +151,16 @@ def build_bridge(*, legacy_workspace, checkpoint, endpoint, store_path, tokenize
     return LegacyBridge(client, tokenizer, checkpoint, MemoryStore(store_path))
 
 
+def retain_compatible_identity(engine, previous):
+    """Explicit deployment migration: weights may change, memory ABI may not."""
+    import re
+    if (previous.get('config') != engine.model_config or
+            not re.fullmatch(r'[0-9a-f]{64}', previous.get('identity', ''))):
+        raise ValueError('Previous bridge identity has an incompatible memory contract')
+    engine.contract = replace(engine.contract, identity=previous['identity'])
+    engine.backend.contract = engine.contract
+
+
 def main():
     import argparse
     import uvicorn
@@ -159,9 +172,13 @@ def main():
     parser.add_argument('--store', required=True)
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=8421)
+    parser.add_argument('--compatible-identity-info', type=Path,
+                        help='Explicit prior /v1/remory/info receipt for an identical memory ABI')
     args = parser.parse_args()
     engine = build_bridge(legacy_workspace=args.legacy_workspace, checkpoint=args.checkpoint,
                           endpoint=args.endpoint, store_path=args.store)
+    if args.compatible_identity_info:
+        retain_compatible_identity(engine, json.loads(args.compatible_identity_info.read_text()))
     uvicorn.run(create_app(engine), host=args.host, port=args.port)
 
 
