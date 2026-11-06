@@ -237,6 +237,8 @@ def run(args):
             (directory / '.codex/config.toml').write_text('\n'.join(
                 f'{k} = {toml(v)}' for k, v in runtime.items()) + '\n')
             (directory / '.codex/config.toml').chmod(0o600)
+            from .native_folding import NativeFolder
+            provider.folder = NativeFolder(binary, runtime, env, provider)
             manifest.update(identity=info['identity'], model=config['target_model'], url=url,
                             updated_at=time.time(), status='running', pid=os.getpid(),
                             research_tools=research_tools, tools_venv=tools_venv,
@@ -258,21 +260,23 @@ def run(args):
                 command.append(args.prompt)
             print(f'[r-codex] Resume later: r-codex resume {name}', flush=True)
             try:
-                if online is not None:
-                    from .host import host
-                    from .frontend import endpoint
-                    with host(directory, binary, workspace, env,
-                              saved['thread_id'] if resuming else None, 'remory', args.unsafe) as native:
-                        manifest.update(thread_id=native['thread_id'], child_pid=native['child_pid'])
-                        atomic_json(directory / 'session.json', manifest)
-                        with endpoint(directory, native['endpoint'], control=online) as address:
-                            command = [str(binary), 'resume', '--remote', address, native['thread_id'],
-                                       '-C', str(workspace), '--no-alt-screen']
-                            if args.prompt:
-                                command.append(args.prompt)
+                from .host import host
+                from .frontend import endpoint
+                from .session_control import SessionControl
+                with host(directory, binary, workspace, env,
+                          saved['thread_id'] if resuming else None, 'remory', args.unsafe) as native:
+                    manifest.update(thread_id=native['thread_id'], child_pid=native['child_pid'])
+                    atomic_json(directory / 'session.json', manifest)
+                    controls = SessionControl(provider, native['thread_id'], online)
+                    with endpoint(directory, native['endpoint'], control=controls) as address:
+                        command = [str(binary), 'resume', '--remote', address, native['thread_id'],
+                                   '-C', str(workspace), '--no-alt-screen']
+                        if args.prompt:
+                            command.append(args.prompt)
+                        print('[r-codex] /agentic_compact [on|off|status] controls isolated message folding.', flush=True)
+                        if online is not None:
                             print('[r-codex] REMORY: /remory train · /remory load · /remory status · /remory stop', flush=True)
-                            return run_terminal(command, workspace, env, session=name, local_commands=True)
-                return run_terminal(command, workspace, env, session=name)
+                        return run_terminal(command, workspace, env, session=name, local_commands=True)
             finally:
                 manifest.update(status='closed', updated_at=time.time(),
                                 thread_id=provider.meta['root_thread_id'] or manifest.get('thread_id'))

@@ -1,0 +1,25 @@
+{
+  "schema": "recursive_memory_stack_v1",
+  "target": {
+    "repo_id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+  },
+  "compressor": {
+    "repo_id": "mocoV3/qwen38-residual-compressor-step2320",
+    "revision": "0119b5c6e6840799a9296f12e5e2f3b11fb7f5f3"
+  },
+  "downloads": {
+    "endpoint": "https://hf-mirror.com",
+    "direct": true
+  },
+  "runtime": {
+    "cuda": "auto",
+    "document_sandbox": "auto"
+  },
+  "server": {
+    "port": 30000,
+    "devices": "auto",
+    "tp": "auto",
+    "memory_fraction": "auto"
+  }
+}

@@ -13,7 +13,7 @@ from websockets.sync.server import unix_serve
 from websockets.exceptions import ConnectionClosed
 
 from .transport import endpoint_path
-from ..online.control import command
+from .session_control import command
 
 
 class Connection:
@@ -124,7 +124,7 @@ class Connection:
                 turnId=turn, item=consumed)))
             self.send(dict(method='item/completed', params=dict(threadId=thread,
                 turnId=turn, item=consumed)))
-        if args in (['status'], ['help']):
+        if args in (['status'], ['help'], ['agentic_compact', 'status']):
             # Read-only commands remain available during checkpoint validation.
             threading.Thread(target=self.local, args=(context, args), daemon=True).start()
             return
@@ -177,6 +177,9 @@ class Connection:
     def local(self, context, args):
         thread, turn, _, _ = context
         try:
+            check_thread = getattr(self.control, 'check_thread', None)
+            if check_thread:
+                check_thread(thread)
             result = self.pick(thread, turn) if args == ['load'] else self.control.execute(args)
             self.say(context, result)
         except Exception as exc:

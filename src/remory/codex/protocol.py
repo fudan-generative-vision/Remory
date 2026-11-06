@@ -4,6 +4,27 @@ import re
 import uuid
 from copy import deepcopy
 
+REASONING_BOUNDARY_POLICY = 'ignore_explicitly_quoted_think_close_v1'
+
+
+def _reasoning_boundary(text):
+    """Keep explicitly quoted transcript delimiters inside the reasoning text.
+
+    A copied JSON transcript can contain literal backslash-n around </think>.
+    Those characters are data, unlike the actual newline-delimited boundary.
+    Do not use rsplit: the visible tool arguments may also quote </think>.
+    Only skip unambiguous local quoting; malformed calls still fail closed.
+    """
+    for match in re.finditer(r'</think>', text):
+        before, after = text[:match.start()], text[match.end():]
+        escaped_line = (before.endswith(r'\n')
+                        and re.match(r'\\+(?:n|r\\+n)', after) is not None)
+        quoted_marker = any(before.endswith(q) and after.startswith(q)
+                            for q in ('`', '"', "'"))
+        if not escaped_line and not quoted_marker:
+            return match.start()
+    return None
+
 
 def tools_from_wire(tools):
     native, routes = [], {}
@@ -142,10 +163,11 @@ def _coerce(text, schema):
 def parse_output(text, routes, *, thinking=True):
     """Parse native Qwen XML; accept standard JSON tool calls and GLM XML too."""
     reasoning = ''
-    if '</think>' in text:
-        reasoning, text = text.split('</think>', 1)
+    boundary = _reasoning_boundary(text)
+    if boundary is not None:
+        reasoning, text = text[:boundary], text[boundary + len('</think>'):]
         reasoning = reasoning.removeprefix('<think>').strip()
-    elif thinking and '<tool_call>' not in text:
+    elif thinking and ('</think>' in text or '<tool_call>' not in text):
         # A length-limited unfinished reasoning trace must not become a final answer.
         raise ValueError('The model did not finish its reasoning')
     for marker in ['<|im_end|>', '<|endoftext|>', '<|fim_suffix|>', '[eop]']:

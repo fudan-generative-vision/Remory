@@ -11,10 +11,11 @@ class TerminalCommandsTest(unittest.TestCase):
         return screen
 
     def test_only_standalone_composer_commands_bypass_builtin_dispatch(self):
-        for text in ['/remory', '/remory load', '/remory train', '/remory status']:
+        for text in ['/remory', '/remory load', '/remory train', '/remory status',
+                     '/agentic_compact', '/agentic_compact off', '/agentic_compact status']:
             self.assertEqual(self.composer(text).submission(b'\r'), b'\x01 \x05\r')
         for text in ['/permissions', '/goal test', '/remoryx', 'explain /remory load',
-                     '`/remory train`', '\\remory load']:
+                     '`/remory train`', '\\remory load', 'explain /agentic_compact', '/agentic_compactx']:
             self.assertEqual(self.composer(text).submission(b'\r'), b'\r')
 
     def test_history_and_modal_cursors_are_not_commands(self):

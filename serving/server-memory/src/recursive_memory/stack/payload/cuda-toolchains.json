@@ -1,0 +1,52 @@
+{
+  "cu128": {
+    "release": "12.8.1",
+    "components": {
+      "cuda_nvcc": {
+        "version": "12.8.93",
+        "relative_path": "cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-12.8.93-archive.tar.xz",
+        "sha256": "9961b3484b6b71314063709a4f9529654f96782ad39e72bf1e00f070db8210d3"
+      },
+      "cuda_cudart": {
+        "version": "12.8.90",
+        "relative_path": "cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.8.90-archive.tar.xz",
+        "sha256": "8d566b5fe745c46842dc16945cf36686227536decd2302c372be86da37faca68"
+      },
+      "cuda_cccl": {
+        "version": "12.8.90",
+        "relative_path": "cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-12.8.90-archive.tar.xz",
+        "sha256": "0740e9e01e4f15e17c5ab8d68bba4f8ec0eb6b84edccba4ac45112d2d2174e4b"
+      }
+    }
+  },
+  "cu130": {
+    "release": "13.0.2",
+    "components": {
+      "cuda_nvcc": {
+        "version": "13.0.88",
+        "relative_path": "cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-13.0.88-archive.tar.xz",
+        "sha256": "48e35be3cfbf4b4fbc16828eaec8a7048ee789403049dc409f7b643d6259cf7a"
+      },
+      "cuda_cudart": {
+        "version": "13.0.96",
+        "relative_path": "cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-13.0.96-archive.tar.xz",
+        "sha256": "25b8071951baba827be1580b841d363464f6ee6c39f48d33a81646f90cc95ed1"
+      },
+      "cuda_cccl": {
+        "version": "13.0.85",
+        "relative_path": "cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-13.0.85-archive.tar.xz",
+        "sha256": "ed845eae8c1767706b6ee91e40c608a03f6f633551a849b63f7346d32d73ee60"
+      },
+      "cuda_crt": {
+        "version": "13.0.88",
+        "relative_path": "cuda_crt/linux-x86_64/cuda_crt-linux-x86_64-13.0.88-archive.tar.xz",
+        "sha256": "5a3279a049ffc1cdb951c44cb95206acfdde9e9ae5e87825fc18d7e4a6878bb0"
+      },
+      "libnvvm": {
+        "version": "13.0.88",
+        "relative_path": "libnvvm/linux-x86_64/libnvvm-linux-x86_64-13.0.88-archive.tar.xz",
+        "sha256": "17ef1665b63670887eeba7d908da5669fa8c66bb73b5b4c1367f49929c086353"
+      }
+    }
+  }
+}

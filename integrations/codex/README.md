@@ -34,6 +34,72 @@ Use `/compact` in the UI to create a summary and residual memory. Automatic
 compaction uses the context capacity reported by the server. A failed summary
 or encode leaves the existing context intact.
 
+## Agentic compaction (per session)
+
+Enter `/agentic_compact` to enable message folding for the current session.
+`/agentic_compact status` reports the setting; `/agentic_compact off` restores
+standard Remory compaction. The setting persists when this session is resumed.
+Enabling it does not compact immediately or change the automatic threshold.
+Subsequent `/compact` and automatic compactions use the same folding path.
+
+At that boundary, a temporary local Codex director uses native `spawn_agent`
+with `fork_context=false`. Its organizer receives access to a deep copy of the
+messages through four restricted tools: inspect, test, commit, and abort.
+It uses the session's Remory model and reasoning setting. The director only
+coordinates native tools; it does not make model calls or use a logged-in
+Codex account. This organizer is a child of the temporary director, not an
+extra research worker in the interactive thread.
+
+The organizer proposes ordered replacements of assistant spans or entire tool
+exchanges, with a factual summary for every removed span. User/system messages
+are immutable; partial tool exchanges and untested candidates are rejected.
+The parent revalidates the edit plan, encodes the **folded copy** as REMORY
+residual memory, and durably saves the checkpoint before replacing its context.
+Existing parent memory and completed regular-child memories are included in
+the encode; the organizer's scratch conversation is not. Native `close_agent`
+then closes the organizer, and its temporary home and transcript are removed.
+The organizer creates no persistent residual checkpoint of its own.
+
+Failures before commit retain the parent history. A failed close terminates the
+isolated runtime and records a cleanup warning without invalidating a committed
+parent checkpoint. Failed deletion of an uncommitted allocation records its
+handle in the session provider directory for cleanup. Saved folding receipts
+include the model, reasoning setting, source digest, edits and native thread IDs.
+Structural checks cannot prove the semantic accuracy of an AI-generated summary.
+
+The pinned upstream TUI does not register additional bare slash commands.
+The launcher routes `/agentic_compact` through its local native RPC command
+channel, shared with `/remory`. The command and acknowledgement never enter
+the model's history. Only a standalone command from the interactive thread
+changes the setting; quoted history, tool results and child messages cannot
+do so. Mutating commands wait for an active turn to finish; status is read-only.
+Start or resume through the updated r-codex launcher to load the command;
+already-running terminal processes are unchanged.
+
+### Local deployment with legacy sessions
+
+`python -m remory.codex.local_entry` optionally reads `.remory/launcher.json`
+(or `REMORY_LAUNCHER_CONFIG`). New sessions use this version and the configured
+default server. `r-codex list` and the resume picker combine both session stores,
+using `remory:SESSION` and `legacy:SESSION` to disambiguate names. Existing sessions
+retain their saved runtime, model and memory backend; no implicit migration takes
+place. `r-codex --legacy ...` explicitly selects the previous launcher.
+
+The optional `remory.codex.legacy_bridge` provides the public memory API over an
+attested legacy residual server. It runs on CPU, preserves the checkpoint's
+compression algorithm, and stores only new immutable memory handles. It does
+not load model weights or restart shared inference. Its SQLite memory store
+must persist for new sessions to resume. Server identity changes fail closed.
+This adapter does **not** advertise online training; `/remory` training commands
+require a server that supports the v0.4 online API. Agentic compaction works
+through this adapter. Legacy sessions continue to use their original features.
+
+Deployment configuration contains paths and endpoints, not credentials. Optional
+`tools_env_file` reads only literal Serper/MinerU assignments and never executes
+shell code. `tools_venv` reuses the installed document tools. If `research_tools`
+is enabled in this local configuration, `--no-research-tools` starts a new
+session without them.
+
 ## Resume
 
 ```bash

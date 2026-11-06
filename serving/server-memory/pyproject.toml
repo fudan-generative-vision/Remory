@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recursive-memory"
+version = "0.3.4"
+description = "SGLang and recursive-memory Codex deployment for TB, AutomationBench, JobBench and BrowseComp"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [{name = "Recursive Memory contributors"}]
+dependencies = []
+
+[project.optional-dependencies]
+gateway = ["aiohttp>=3.14,<4"]
+test = ["pytest>=8.4,<10", "ruff>=0.12,<1", "aiohttp>=3.14,<4"]
+
+[project.scripts]
+recursive-memory-stack = "recursive_memory.stack.deploy:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.package-data]
+"recursive_memory.stack" = [
+  "payload/manifest.json", "payload/sglang_overlay/LICENSE",
+  "payload/cuda-toolchains.json", "payload/constraints/*.txt",
+  "payload/workspace/SPECFORGE_LICENSE",
+  "payload/**/*.py", "payload/**/*.json", "payload/**/*.toml",
+  "payload/**/*.sh", "payload/**/*.c", "payload/**/*.h", "payload/**/*.txt",
+  "payload/**/*.j2", "payload/**/*.jinja", "payload/**/*.jinja2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["recursive_memory", "recursive_memory.stack"]
+exclude = ["recursive_memory.stack.payload*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = [
+  "src/recursive_memory/stack/payload",
+  "training/context_compression",
+  "training/specforge",
+  "training/tests",
+  "training/reference_launchers",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]  # Long pinned URLs, ABI identifiers and model prompts.

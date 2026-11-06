@@ -113,5 +113,3 @@ def save_full_checkpoint(output, model, optimizer, *, mode, rank, step, cursor, 
         os.rename(staging, destination)
     dist.barrier()
     return destination
-
-

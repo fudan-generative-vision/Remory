@@ -20,7 +20,7 @@ class CommandScreen:
         screen = self.screen
         row = screen.display[screen.cursor.y].strip()
         if (not screen.cursor.hidden
-                and re.fullmatch(r'› /remory(?:\s+[^\r\n]*)?', row)):
+                and re.fullmatch(r'› /(?:remory|agentic_compact)(?:\s+[^\r\n]*)?', row)):
             # Codex 0.149 explicitly treats a leading space as literal input,
             # then trims it before turn/start or turn/steer. Our RPC proxy takes
             # the exact /remory command before any model call. No command text

@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-06",
+  "hardware": "NVIDIA L20D",
+  "model": "Qwen3.8-27B BF16, TP1",
+  "remory": "online step 250",
+  "settings": {
+    "decode_cuda_graph": true,
+    "overlap_schedule": true,
+    "chunked_prefill_size": 8192,
+    "piecewise_prefill_cuda_graph": "automatically disabled by model runtime"
+  },
+  "measurement": "Non-streaming end-to-end generation, includes prefill and HTTP overhead. Same short prompt and fixed 256 output tokens for the paired canary. Not a general model benchmark.",
+  "baseline_single_tok_s": [
+    30.696502538763927,
+    30.895707044380185
+  ],
+  "optimized_single_tok_s": [
+    87.36268314810813,
+    88.72192288322375
+  ],
+  "baseline_four_concurrent_aggregate_tok_s": 111.42398798180017,
+  "optimized_four_concurrent_aggregate_tok_s": 343.49174751606296,
+  "final_replica_128_token_tok_s": [
+    83.99899959265554,
+    84.37572379915133,
+    84.77802941985088,
+    84.8113938409477
+  ],
+  "validation": {
+    "recursive_memory_max_abs_error": 0.0,
+    "memory_max_abs_error": 0.0,
+    "long_prefill_tokens": 128024,
+    "multimodal_concurrent_requests": 2,
+    "multimodal_request_tokens_before_image_expansion": 10921,
+    "additional_concurrent_plain_generation_tokens": 256
+  },
+  "limits": [
+    "Complete singleton prefill retained for residual encoders and image-plus-memory recovery.",
+    "Cross-chunk generation is not claimed bit-identical.",
+    "Remote ordinary inference integration does not attest REMORY contract compatibility.",
+    "These are serving measurements, not re-evaluated paper benchmark scores."
+  ]
+}

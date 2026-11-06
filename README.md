@@ -196,4 +196,4 @@ and [Transformers](https://github.com/huggingface/transformers).
 }
 ```
 
-[Development](docs/development.md) · [MIT License](LICENSE) · [Third-party notices](NOTICES.md)
+[Development](docs/development.md) · [Online-250 serving pool](serving/server-memory/docs/h20-public-deployment.md) · [MIT License](LICENSE) · [Third-party notices](NOTICES.md)

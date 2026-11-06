@@ -1,5 +1,5 @@
 """A local Responses provider for native Codex, backed by one Remory server."""
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from copy import deepcopy
 import hashlib
 import json
@@ -81,6 +81,7 @@ class Provider:
         self._lock = threading.RLock()
         self._locks = {}
         self._closed = False
+        self.folder = None
         self.meta_path = self.directory / 'provider.json'
         if self.meta_path.exists():
             self.meta = json.loads(self.meta_path.read_text())
@@ -92,6 +93,87 @@ class Provider:
             self.meta = {'identity': info['identity'], 'session_id': session_id,
                          'root_thread_id': None, 'threads': {}}
             atomic_json(self.meta_path, self.meta)
+
+    def agentic_compact_command(self, argument=''):
+        """Session-only switch; invoked by the launcher command, never by the model."""
+        argument = argument.strip().lower()
+        if argument not in {'', 'on', 'off', 'status'}:
+            raise ValueError('Usage: /agentic_compact [on|off|status]')
+        with self._lock:
+            enabled = bool(self.meta.get('agentic_compact', False))
+            if argument != 'status':
+                enabled = argument != 'off'
+                if enabled and self.folder is None:
+                    raise RuntimeError('Native folding runtime is not configured; session is unchanged')
+                updated = {**self.meta, 'agentic_compact': enabled}
+                atomic_json(self.meta_path, updated)
+                self.meta = updated
+        return ('Agentic compact is ' + ('ON' if enabled else 'OFF') + ' for this session. '
+                + ('Manual /compact and automatic compaction use an isolated native organizer.'
+                   if enabled else 'Compaction uses the standard Remory summary path.'))
+
+
+    @contextmanager
+    def _memory_transaction(self):
+        created, committed = [], []
+        try:
+            yield created, committed
+        finally:
+            if created and not committed:
+                pending = list(created)
+                try:
+                    with self.client() as client:
+                        for handle in created:
+                            try:
+                                client.delete(handle)
+                                pending.remove(handle)
+                            except (httpx.HTTPError, RuntimeError, OSError):
+                                pass
+                except (httpx.HTTPError, RuntimeError, OSError):
+                    pass
+                if pending:
+                    # Retain handles for explicit cleanup instead of losing track
+                    # of allocations when the backend is temporarily unavailable.
+                    try:
+                        atomic_json(self.directory / ('cleanup-' + uuid.uuid4().hex + '.json'),
+                                    {'handles': pending, 'reason': 'uncommitted compaction'})
+                    except OSError:
+                        import warnings
+                        warnings.warn('Uncommitted memory cleanup could not be recorded', RuntimeWarning)
+
+
+    def _agentic_compact(self, codec, prefix, messages, previous, tools, client,
+                         branches, lifecycle, *, capture=False, reasoning=None):
+        if self.folder is None:
+            raise RuntimeError('Native folding runtime is unavailable; original context retained')
+        snapshot = dict(messages=deepcopy(messages), prefix=deepcopy(prefix),
+                        previous_summary=previous['summary'] if previous else None,
+                        branch_summaries=[b['summary'] for b in branches],
+                        model=self.config['target_model'],
+                        summary_contract=deepcopy(self.config.get('summary_contract', {})),
+                        reasoning_effort=reasoning)
+        folded = lifecycle.enter_context(self.folder.fold(snapshot))
+        # Validate again at the parent trust boundary. The native runner owns
+        # only a copy and cannot choose prefix, previous handle, or branches.
+        from .folding import FoldState
+        validator = FoldState(snapshot)
+        trial = validator.test_transform(folded['audit']['edits'], folded['summary'])
+        validator.commit_transform(trial['candidate_id'])
+        verified = validator.result
+        if verified['messages'] != folded['messages']:
+            raise ValueError('Organizer result differs from its validated edit plan')
+        summary_ids = codec.summary(verified['summary'])
+        contract = self.config.get('summary_contract', {})
+        if len(summary_ids) > min(contract.get('max_summary_tokens', 4096), self.max_new_tokens):
+            raise ValueError('Organizer summary exceeds the existing summary token budget')
+        if contract.get('output_schema'):
+            from jsonschema import validate
+            validate(json.loads(verified['summary']), contract['output_schema'])
+        checkpoint = self._encode_checkpoint(codec, prefix, verified['messages'], previous, tools,
+            client, branches, verified['summary'], online=True, capture=capture)
+        checkpoint['folding'] = {**verified['audit'], **folded.get('audit', {})}
+        return checkpoint, {'meta_info': folded.get('usage', {})}
+
 
     @contextmanager
     def client(self):
@@ -254,11 +336,17 @@ class Provider:
             summary = summary.removesuffix(end).rstrip()
         if not summary.strip():
             raise RuntimeError('Summary is empty; the original context is retained')
+        return self._encode_checkpoint(codec, prefix, messages, previous, tools, client,
+            branches, summary, online=online, capture=capture), result
+
+    def _encode_checkpoint(self, codec, prefix, messages, previous, tools, client, branches,
+                           summary, *, online=False, capture=False):
+        prefix_ids, history_ids = codec.split(prefix, messages)
         extra = {}
         if online and self.online is not None:
             extra['encoder_version'] = self.online.selection()['id']
-            # Only root text frontiers with a next assistant step are supervised.
-            # Child folding and manual compaction after an answer are excluded.
+            # Supervise the exact encoded (possibly folded) context, never the
+            # organizer's scratch turns or unaccepted candidates.
             if capture and not branches and messages and messages[-1]['role'] != 'assistant':
                 _, opened = codec.split(prefix, messages, generation=True)
                 if opened[:len(history_ids)] == history_ids and opened[len(history_ids):]:
@@ -266,11 +354,11 @@ class Provider:
         memory = client.compact(prefix_ids=prefix_ids, history_ids=history_ids,
             summary_ids=codec.summary(summary), previous=previous['handle'] if previous else None,
             branches=[branch['handle'] for branch in branches], **extra)
-        checkpoint = {'handle': memory['handle'], 'summary': summary.strip(), 'prefix': prefix,
-                      'tools_sha256': digest(tools), 'receipt': memory['receipt']}
+        checkpoint = dict(handle=memory['handle'], summary=summary.strip(), prefix=prefix,
+                          tools_sha256=digest(tools), receipt=memory['receipt'])
         if extra:
             checkpoint['online'] = dict(encoder_version=extra['encoder_version'], sample_id=memory.get('sample_id'))
-        return checkpoint, result
+        return checkpoint
 
     def _flush_online(self, thread, state):
         if self.online is None or not state.get('online_pending'):
@@ -289,18 +377,36 @@ class Provider:
             # queued for the next request without invalidating this compaction.
             logging.getLogger(__name__).exception('Online acknowledgement will be retried')
 
+    def _reconcile_thread(self, thread, state, *, activity=False):
+        """Recover routing from durable thread state without re-encoding its memory."""
+        with self._lock:
+            entry = self.meta['threads'][thread]
+            completion = state.get('completion')
+            if not activity and (not completion or entry.get('completion') == completion):
+                return
+            updated = deepcopy(self.meta)
+            if activity:
+                updated['threads'][thread]['last_activity'] = time.time()
+            if completion:
+                updated['threads'][thread]['completion'] = deepcopy(completion)
+            atomic_json(self.meta_path, updated)
+            self.meta = updated
+
     def handle(self, request, headers=None, *, force_compact=False):
         if not isinstance(request, dict):
             raise ValueError('Responses request must be an object')
         thread, lock = self._thread(headers or {})
-        with lock:
+        with lock, ExitStack() as lifecycle, self._memory_transaction() as transaction:
+            created, durable = transaction
             state = self._load(thread)
             self._flush_online(thread, state)
             committed = []
             request_key = digest({'request': request, 'force_compact': force_compact})
             if request_key in state['responses']:
+                self._reconcile_thread(thread, state)
                 return state['responses'][request_key]
             codec, prefix, messages, previous, routes, compact, tools = self._context(request, state)
+            agentic = thread == self.meta['root_thread_id'] and self.meta.get('agentic_compact', False)
             with self.client() as client:
                 branches = []
                 if thread == self.meta['root_thread_id'] and not self.glm:
@@ -311,9 +417,10 @@ class Provider:
                         if (child.get('parent') == thread and completion
                                 and completion['handle'] not in state.get('folded', [])):
                             branches.append(completion)
-                if branches and not (compact or force_compact):
+                if branches and not (compact or force_compact) and not agentic:
                     previous, _ = self._compact(codec, prefix, messages, previous, tools, client, branches,
                         online=True)
+                    created.append(previous['handle'])
                     committed.append(previous)
                     previous['instructions'] = request.get('instructions') or 'You are a coding assistant. Use the available tools to complete the user task.'
                     previous['wire_base'] = self._wire_items(request.get('input', []))
@@ -321,8 +428,14 @@ class Provider:
                     state.setdefault('folded', []).extend(b['handle'] for b in branches)
                     messages = []
                 if compact or force_compact:
-                    checkpoint, generated = self._compact(codec, prefix, messages, previous, tools, client, branches,
-                        online=thread == self.meta['root_thread_id'], capture=not state['images'])
+                    if agentic:
+                        checkpoint, generated = self._agentic_compact(codec, prefix, messages, previous,
+                            tools, client, branches, lifecycle, capture=not state['images'],
+                            reasoning=(request.get('reasoning') or {}).get('effort'))
+                    else:
+                        checkpoint, generated = self._compact(codec, prefix, messages, previous, tools, client, branches,
+                            online=thread == self.meta['root_thread_id'], capture=not state['images'])
+                    created.append(checkpoint['handle'])
                     committed.append(checkpoint)
                     checkpoint['instructions'] = request.get('instructions') or 'You are a coding assistant. Use the available tools to complete the user task.'
                     marker = 'remory.v1.' + checkpoint['handle']
@@ -351,6 +464,7 @@ class Provider:
                             and not any(x['type'] in {'function_call', 'custom_tool_call'} for x in output)):
                         completed = messages + messages_from_wire(output)
                         checkpoint, _ = self._compact(codec, prefix, completed, previous, tools, client)
+                        created.append(checkpoint['handle'])
                         state['completion'] = checkpoint
             meta = generated.get('meta_info', {})
             input_tokens = meta.get('prompt_tokens', meta.get('input_tokens', 0))
@@ -365,17 +479,17 @@ class Provider:
             state['responses'][request_key] = response
             state.setdefault('online_pending', []).extend(c['online'] for c in committed if c.get('online'))
             atomic_json(self._path(thread), state)
+            durable.append(True)
             self._flush_online(thread, state)
-            with self._lock:
-                self.meta['threads'][thread]['last_activity'] = time.time()
-                if state.get('completion'):
-                    self.meta['threads'][thread]['completion'] = state['completion']
-                atomic_json(self.meta_path, self.meta)
+            self._reconcile_thread(thread, state, activity=True)
             return response
 
     def close(self):
         with self._lock:
             self._closed = True
+        close_folder = getattr(self.folder, 'close', None)
+        if close_folder is not None:
+            close_folder()
 
 
 def create_app(provider, *, token):

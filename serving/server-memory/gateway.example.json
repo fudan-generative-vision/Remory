@@ -1,0 +1,13 @@
+{
+  "max_pending": 256,
+  "queue_timeout": 1800,
+  "request_timeout": 3600,
+  "probe_interval": 1,
+  "max_body_bytes": 1073741824,
+  "backends": [
+    {"name": "gpu0", "url": "http://127.0.0.1:30000", "model": "Qwen3.8-27B", "max_inflight": 4},
+    {"name": "gpu1", "url": "http://127.0.0.1:30001", "model": "Qwen3.8-27B", "max_inflight": 4},
+    {"name": "gpu2", "url": "http://127.0.0.1:30002", "model": "Qwen3.8-27B", "max_inflight": 4},
+    {"name": "gpu3", "url": "http://127.0.0.1:30003", "model": "Qwen3.8-27B", "max_inflight": 4}
+  ]
+}

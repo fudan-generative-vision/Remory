@@ -203,12 +203,13 @@ def fit(text, width):
     return ''.join(output)
 
 
-def choose_session(root):
+def choose_session(root, *, loader=None):
     curses.use_env(False)  # Use the real terminal size, not stale LINES/COLUMNS.
-    return curses.wrapper(_screen, Path(root))
+    return curses.wrapper(_screen, Path(root), loader)
 
 
-def _screen(screen, root):
+def _screen(screen, root, loader=None):
+    load = loader or (lambda: sessions_in(root))
     try:
         curses.curs_set(0)
     except curses.error:
@@ -224,7 +225,7 @@ def _screen(screen, root):
         curses.init_pair(1, curses.COLOR_CYAN, -1)
         accent = curses.color_pair(1) | curses.A_BOLD
     query, cursor, message = '', 0, ''
-    items, refreshed = sessions_in(root), time.monotonic()
+    items, refreshed = load(), time.monotonic()
     visible = []
 
     def put(row, value, attr=0):
@@ -238,7 +239,7 @@ def _screen(screen, root):
     while True:
         if time.monotonic() - refreshed > 2:
             previous = visible[cursor]['name'] if 0 <= cursor < len(visible) else None
-            items, refreshed = sessions_in(root), time.monotonic()
+            items, refreshed = load(), time.monotonic()
         else:
             previous = None
         visible = [item for item in items if query.casefold() in
@@ -286,7 +287,7 @@ def _screen(screen, root):
             cursor = max(0, cursor - max(1, (height - 9) // 3))
         elif key in ('\n', '\r', curses.KEY_ENTER) and visible:
             item = visible[cursor]
-            fresh = next((row for row in sessions_in(root) if row['name'] == item['name']), None)
+            fresh = next((row for row in load() if row['name'] == item['name']), None)
             if fresh is None:
                 message = 'This session is no longer available.'
             elif fresh['state'] == 'In use':
