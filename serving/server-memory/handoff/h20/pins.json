@@ -1,0 +1,33 @@
+{
+  "schema": "remory_h20_deployment_v1",
+  "target": {
+    "repository": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "architecture": "Qwen3_5ForConditionalGeneration",
+    "local_source": "/inspire/l20d/project/sais-bio/public/pretrained_models/Qwen/Qwen3.8-27B"
+  },
+  "source_checkpoint": "/inspire/l20d/project/sais-bio/public/hanchen/r-codex-sessions/.remory-training/checkpoints/1793161906297200755-step-000250/serving",
+  "source_config_sha256": "ce9ee6db0a2a27c08ff636510c90d87cac25872db01cdcba5a19496b142df4be",
+  "source_global_step": 14925,
+  "artifact_identity": {
+    "schema": "remory_artifact_identity_v1",
+    "compressor_sha256": "cf1fe99c2f51f330b4b93055b0da4f930e1b01d1841d0b9b9825a8e4dc386732",
+    "contract_sha256": "ea4598529c83cd14447c967210f62d357c304104e76d58f08421c4e854a2b3c3",
+    "target_metadata_sha256": "68dca6ab72fe8b44b54228bb020909c54ef960d6d8a779fbeff72bcdaa27e08c"
+  },
+  "sglang": {
+    "repository": "https://github.com/sgl-project/sglang.git",
+    "base_commit": "f08726fd56c7ff6d8bd258f1545f98148fa4ef58",
+    "version": "0.5.13",
+    "removed": []
+  },
+  "public_checkpoint": {
+    "repository": "fudan-generative-ai/Qwen3.8-27B-REMORY-1.9B",
+    "revision": "5ada60e61d5425012b92a7c2b2796fc0b0f29241",
+    "format": "safetensors",
+    "source_compressor_sha256": "cf1fe99c2f51f330b4b93055b0da4f930e1b01d1841d0b9b9825a8e4dc386732",
+    "safetensors_sha256": "59d36bcec81c44bb314b63afea4dae79d8cda53a8918a5364143d8ecb2a499e5",
+    "note": "Online step 250 continuing from Stage-II-14925. Fixed public export; verified lossless tensors, not a new benchmark measurement."
+  },
+  "source_online_step": 250
+}

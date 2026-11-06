@@ -1,0 +1,129 @@
+"""Canonical r^2eAct facade for SGLang-backed recursive rollouts."""
+
+from __future__ import annotations
+
+from context_compression import grepseek_sglang_live as _legacy
+
+
+CAUSAL_OBSERVATION_CACHE_V1 = _legacy.CAUSAL_OBSERVATION_CACHE_V1
+CODEX_NATIVE_COMPACTION_POLICY = _legacy.CODEX_NATIVE_COMPACTION_POLICY
+LATEST_TOOL_EXCHANGE_RAW_V1 = _legacy.LATEST_TOOL_EXCHANGE_RAW_V1
+NATIVE_HISTORY_POLICY_APPEND_ONLY_TOKEN_EXACT = (
+    _legacy.NATIVE_HISTORY_POLICY_APPEND_ONLY_TOKEN_EXACT
+)
+NATIVE_HISTORY_POLICY_LEGACY_FULL_RENDER = (
+    _legacy.NATIVE_HISTORY_POLICY_LEGACY_FULL_RENDER
+)
+QWEN36_GENERATION_SAMPLING = _legacy.QWEN36_GENERATION_SAMPLING
+QWEN36_GENERATION_SAMPLING_POLICY = _legacy.QWEN36_GENERATION_SAMPLING_POLICY
+R2EACT_RAW_SUFFIX_IMAGE_POLICY = _legacy.R2EACT_RAW_SUFFIX_IMAGE_POLICY
+R2EACT_RAW_SUFFIX_IMAGE_CONTEXT_BUDGET_POLICY = (
+    _legacy.R2EACT_RAW_SUFFIX_IMAGE_CONTEXT_BUDGET_POLICY
+)
+QWEN38_RAW_SUFFIX_IMAGE_MAX_PIXELS = (
+    _legacy.QWEN38_RAW_SUFFIX_IMAGE_MAX_PIXELS
+)
+QWEN38_RAW_SUFFIX_IMAGE_MAX_VISUAL_TOKENS_PER_IMAGE = (
+    _legacy.QWEN38_RAW_SUFFIX_IMAGE_MAX_VISUAL_TOKENS_PER_IMAGE
+)
+QWEN38_RAW_SUFFIX_IMAGE_CONTEXT_RESERVE_TOKENS_PER_IMAGE = (
+    _legacy.QWEN38_RAW_SUFFIX_IMAGE_CONTEXT_RESERVE_TOKENS_PER_IMAGE
+)
+QWEN36_OVERSIZED_COMPLETE_ROUND_EVICTION_POLICY = (
+    _legacy.QWEN36_OVERSIZED_COMPLETE_ROUND_EVICTION_POLICY
+)
+QWEN36_POST_COMPRESSION_GENERATION_POLICIES = (
+    _legacy.QWEN36_POST_COMPRESSION_GENERATION_POLICIES
+)
+QWEN36_POST_COMPRESSION_GENERATION_POLICY_CHECKPOINT_CAP = (
+    _legacy.QWEN36_POST_COMPRESSION_GENERATION_POLICY_CHECKPOINT_CAP
+)
+QWEN36_POST_COMPRESSION_GENERATION_POLICY_SGLANG_EXPERIMENTAL = (
+    _legacy.QWEN36_POST_COMPRESSION_GENERATION_POLICY_SGLANG_EXPERIMENTAL
+)
+QWEN36_ROUND_EXPERIMENTAL_TOOL_RESULT_FIT_POLICY = (
+    _legacy.QWEN36_ROUND_EXPERIMENTAL_TOOL_RESULT_FIT_POLICY
+)
+QWEN36_ROUND_RECURSIVE_V1 = _legacy.QWEN36_ROUND_RECURSIVE_V1
+QWEN36_ROUND_WORKING_MEMORY_POLICY = _legacy.QWEN36_ROUND_WORKING_MEMORY_POLICY
+QWEN36_TOKEN_CLOCK_V1 = _legacy.QWEN36_TOKEN_CLOCK_V1
+RECURSIVE_HISTORY_V2 = _legacy.RECURSIVE_HISTORY_V2
+RECURSIVE_HISTORY_WITH_RAW_WORKING_MEMORY_ABLATION_V1 = (
+    _legacy.RECURSIVE_HISTORY_WITH_RAW_WORKING_MEMORY_ABLATION_V1
+)
+RECURSIVE_WORKING_MEMORY_V3 = _legacy.RECURSIVE_WORKING_MEMORY_V3
+SGLANG_CACHE_POLICY_IDLE_FLUSH_UNIQUE_KEY_V1 = (
+    _legacy.SGLANG_CACHE_POLICY_IDLE_FLUSH_UNIQUE_KEY_V1
+)
+SGLANG_CACHE_POLICY_ISOLATED_SOFT_NO_FLUSH_DISCRETE_PREFIX_V1 = (
+    _legacy.SGLANG_CACHE_POLICY_ISOLATED_SOFT_NO_FLUSH_DISCRETE_PREFIX_V1
+)
+
+R2EActCheckpointServingContract = _legacy.GrepSeekCheckpointServingContract
+R2EActRawSuffixImage = _legacy.R2EActRawSuffixImage
+R2EActSGLangRawRolloutGenerator = _legacy.GrepSeekSGLangRawRolloutGenerator
+R2EActSGLangRecursiveRolloutGenerator = _legacy.GrepSeekSGLangRecursiveRolloutGenerator
+R2EActSGLangRecursiveWorkingMemoryRolloutGenerator = (
+    _legacy.GrepSeekSGLangRecursiveWorkingMemoryRolloutGenerator
+)
+R2EActSGLangRolloutGenerator = _legacy.GrepSeekSGLangRolloutGenerator
+R2EActSGLangWorkingMemoryV3RolloutGenerator = (
+    _legacy.GrepSeekSGLangWorkingMemoryV3RolloutGenerator
+)
+Qwen36SGLangTokenClockRolloutGenerator = _legacy.Qwen36SGLangTokenClockRolloutGenerator
+R2EActSGLangTokenClockRolloutGenerator = _legacy.Qwen36SGLangTokenClockRolloutGenerator
+ResolvedR2EActLiveData = _legacy.ResolvedGrepSeekLiveData
+
+load_sglang_live_bundle = _legacy.load_sglang_live_bundle
+load_r2eact_sglang_live_bundle = _legacy.load_sglang_live_bundle
+make_sglang_raw_live_bundle = _legacy.make_sglang_raw_live_bundle
+make_r2eact_sglang_raw_live_bundle = _legacy.make_sglang_raw_live_bundle
+resolve_r2eact_checkpoint_serving_contract = (
+    _legacy.resolve_grepseek_checkpoint_serving_contract
+)
+resolve_r2eact_live_data_paths = _legacy.resolve_grepseek_live_data_paths
+
+
+__all__ = [
+    "CAUSAL_OBSERVATION_CACHE_V1",
+    "CODEX_NATIVE_COMPACTION_POLICY",
+    "LATEST_TOOL_EXCHANGE_RAW_V1",
+    "NATIVE_HISTORY_POLICY_APPEND_ONLY_TOKEN_EXACT",
+    "NATIVE_HISTORY_POLICY_LEGACY_FULL_RENDER",
+    "QWEN36_GENERATION_SAMPLING",
+    "QWEN36_GENERATION_SAMPLING_POLICY",
+    "R2EACT_RAW_SUFFIX_IMAGE_POLICY",
+    "R2EACT_RAW_SUFFIX_IMAGE_CONTEXT_BUDGET_POLICY",
+    "QWEN38_RAW_SUFFIX_IMAGE_MAX_PIXELS",
+    "QWEN38_RAW_SUFFIX_IMAGE_MAX_VISUAL_TOKENS_PER_IMAGE",
+    "QWEN38_RAW_SUFFIX_IMAGE_CONTEXT_RESERVE_TOKENS_PER_IMAGE",
+    "QWEN36_OVERSIZED_COMPLETE_ROUND_EVICTION_POLICY",
+    "QWEN36_POST_COMPRESSION_GENERATION_POLICIES",
+    "QWEN36_POST_COMPRESSION_GENERATION_POLICY_CHECKPOINT_CAP",
+    "QWEN36_POST_COMPRESSION_GENERATION_POLICY_SGLANG_EXPERIMENTAL",
+    "QWEN36_ROUND_EXPERIMENTAL_TOOL_RESULT_FIT_POLICY",
+    "QWEN36_ROUND_RECURSIVE_V1",
+    "QWEN36_ROUND_WORKING_MEMORY_POLICY",
+    "QWEN36_TOKEN_CLOCK_V1",
+    "Qwen36SGLangTokenClockRolloutGenerator",
+    "R2EActCheckpointServingContract",
+    "R2EActRawSuffixImage",
+    "R2EActSGLangRawRolloutGenerator",
+    "R2EActSGLangRecursiveRolloutGenerator",
+    "R2EActSGLangRecursiveWorkingMemoryRolloutGenerator",
+    "R2EActSGLangRolloutGenerator",
+    "R2EActSGLangTokenClockRolloutGenerator",
+    "R2EActSGLangWorkingMemoryV3RolloutGenerator",
+    "RECURSIVE_HISTORY_V2",
+    "RECURSIVE_HISTORY_WITH_RAW_WORKING_MEMORY_ABLATION_V1",
+    "RECURSIVE_WORKING_MEMORY_V3",
+    "SGLANG_CACHE_POLICY_IDLE_FLUSH_UNIQUE_KEY_V1",
+    "SGLANG_CACHE_POLICY_ISOLATED_SOFT_NO_FLUSH_DISCRETE_PREFIX_V1",
+    "ResolvedR2EActLiveData",
+    "load_r2eact_sglang_live_bundle",
+    "load_sglang_live_bundle",
+    "make_r2eact_sglang_raw_live_bundle",
+    "make_sglang_raw_live_bundle",
+    "resolve_r2eact_checkpoint_serving_contract",
+    "resolve_r2eact_live_data_paths",
+]

@@ -1,0 +1,36 @@
+{
+  "schema": "jobbench_browsecomp_publication_v1",
+  "upstream_local_sha256": {
+    "job_bench_eval/__init__.py": "1051e364348780caba909d4182bbcc93cdf0d57e5c75371835d3994311812718",
+    "job_bench_eval/bootstrap.py": "29d3d9817a3c8ef7dd653c2be9f6ff8ef28ee8a11ece39fd9954511cf644413e",
+    "job_bench_eval/config.py": "266fae8ba611e838ec605d0dc6c78ac4952f72fec0370a31a4954f099a42bd69",
+    "job_bench_eval/dataset.py": "54ced47560b6ec5dd6ae3bb178f6c04efdd4bdad86a481f2f3a51cfbe567f70a",
+    "job_bench_eval/pool.py": "279647b0532511444f99ac1c6203e61e480ad9b2cb44bf5b41c7b563e6a7d4cc",
+    "job_bench_eval/maintenance.py": "27651dbed649dab5f9196bf005ec924bdbc69360be917c7341c5555c18bea375",
+    "job_bench_eval/monitor_streamlit.py": "afccca929da73e353ec38e55e37652cd70d833b41ee1ab86cdf9c3a560f490b9",
+    "job_bench_eval/codex_judge.py": "cf5e3a234f683128357522fac63ab1776d9cc0e0494c19477da76e0906262de0",
+    "job_bench_eval/codex_judge_client.py": "c41316b2a70b17a4744eff70203f1bed075b128360bc03acbabb3427694af858",
+    "job_bench_eval/serving_recovery.py": "e7ab09b8e4bf5d8fa085857190b1298ba2d1926bd4ddd4fcc81e38bcd5d7d01e",
+    "browsecomp_bench_eval/__init__.py": "a904d1f33ababeba1c1a8dcfb2a924ff33937f66c8f83a4b225cd8d2deb6d8ff",
+    "browsecomp_bench_eval/artifacts.py": "809acbf8898de46ce31e28b0ef0715ea136a9c8dfc088c83e4ac67c97fa27433",
+    "browsecomp_bench_eval/dataset.py": "50c47d804935ddefc97bba6f5856fad044a2399882cded604ca12762ad472d0b",
+    "browsecomp_bench_eval/grader.py": "77e4d00f4a963414c030043103fc994a292f00fc8555d516dbb527245dc710ec",
+    "browsecomp_bench_eval/codex_config.py": "cb8b0b3a4bed2fb88ba53201e4fec6db4b437d39344223004cb49bafed016b71",
+    "browsecomp_bench_eval/codex_policy.py": "d8b6a4c347ee5dde7ea424855cc76f5ed837427d571d200e06a8bbb17fce0bbd",
+    "browsecomp_bench_eval/confidence.py": "05f390c8df5e95e6bf4facd796121d36cce4533db86e9357448b97d8a85c048d",
+    "browsecomp_bench_eval/codex_pool.py": "38ce801dd90ffa1d2ce4e0be084dbb76538bf3646f8d59438a2a16f0b73bc9af",
+    "browsecomp_bench_eval/codex100_review.py": "f3a95c641066f259146fee456571954e140924694320f1c2ce96f1a1ddff7454",
+    "browsecomp_bench_eval/codex_monitor_streamlit.py": "7cd8b4b2fed28cfdf5f9986ad8c1ddb14e456d76d9a4a22bf8ec7c0aaf436845",
+    "browsecomp_bench_eval/codex_appeal_contract.py": "d067110684341004d0ecc09ecae2a2aa5cda16b16ed094d57a40ed0566f37f5c",
+    "browsecomp_bench_eval/codex_appeal_output_schema.json": "ff954320845872284a4e5e33263d1461368ae45c96180a39f4df3b0399852ad4",
+    "job_bench_eval/runner.py": "6ce3342b461e83336a18e95f772fde5f2335138848fa7dd6148d8d0cec31b21c",
+    "browsecomp_bench_eval/codex_appeal.py": "73623d7452cf586f5869ad26075cec324d00acfd7546ced65ef8457bfc92680f"
+  },
+  "adaptations": [
+    "Portable installation-prefix paths; no site-specific launchers or credentials.",
+    "Native compact + residual + xhigh only; reuse released shared sandbox and inference backend.",
+    "Codex judge/login remains separate from tested model; browser review policy unchanged.",
+    "Pure BrowseComp appeal parser extracted without legacy pool imports."
+  ],
+  "includes_data_or_results": false
+}

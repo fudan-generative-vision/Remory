@@ -1,0 +1,11 @@
+# Set REMORY_DOMAIN to the real, reachable DNS name before validation/start.
+{$REMORY_DOMAIN} {
+    reverse_proxy 127.0.0.1:30380 {
+        # SSE is flushed automatically. Keep disconnect cancellation enabled.
+        # Do not set flush_interval -1 or enable retries for inference POSTs.
+        transport http {
+            compression off
+            response_header_timeout 3600s
+        }
+    }
+}

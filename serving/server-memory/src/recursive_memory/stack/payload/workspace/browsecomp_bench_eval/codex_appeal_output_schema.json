@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision",
+    "prediction_satisfies_question",
+    "ground_truth_issue",
+    "reason",
+    "primary_sources"
+  ],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["uphold", "request_overturn", "inconclusive"]
+    },
+    "prediction_satisfies_question": {
+      "type": ["boolean", "null"]
+    },
+    "ground_truth_issue": {
+      "type": "string",
+      "enum": ["none", "typo", "alias", "transliteration", "normalization", "incomplete", "other", "uncertain"]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384
+    },
+    "primary_sources": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url", "title", "support"],
+        "properties": {
+          "url": {"type": "string", "minLength": 1, "maxLength": 2048},
+          "title": {"type": "string", "minLength": 1, "maxLength": 512},
+          "support": {"type": "string", "minLength": 1, "maxLength": 2048}
+        }
+      }
+    }
+  }
+}

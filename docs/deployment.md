@@ -7,6 +7,22 @@ Qwen3.8-27B and GLM-5.3-Flash share one installation and SGLang revision:
 The context window defaults to the model maximum: 256K for Qwen and 1M for GLM.
 The Transformers reference backend supports Qwen.
 
+The separately packaged [online-250 serving pool](../serving/server-memory/docs/h20-public-deployment.md)
+contains the legacy residual protocol adapter, authenticated local/remote admission,
+and the production SGLang overlay used by existing r-codex sessions. It has its own
+engine revision, installer, dependency pins, and third-party notices; it does not
+replace the root package's engine installation. Its client compatibility helpers
+require a separately provisioned legacy harness. This source distribution excludes
+live session state, private deployments, credentials, and model weights.
+
+The serving overlay supports decode CUDA Graph, overlap scheduling, and chunked
+text prefill while retaining complete prefills for residual encoding and combined
+image/memory recovery. A remote replica with a different memory contract can join
+as `stateless_only`; it cannot receive memory or session requests. Locally trained
+encoder versions also remain on backends sharing their registry. See the
+[measured serving results](../serving/server-memory/docs/performance-20261106.json)
+for workload-specific timings and validation limits.
+
 ## Requirements
 
 - Linux x86_64, Python 3.11+ with `venv`, `git`, and a C++ compiler.

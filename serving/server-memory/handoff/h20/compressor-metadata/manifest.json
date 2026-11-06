@@ -1,0 +1,15 @@
+{
+  "schema": "context_compression_ddp_v1",
+  "world_size": 2,
+  "export_schema": "qwen38_27b_summary_residual_serving_v1",
+  "compressor_file": "compressor.pt",
+  "config_file": "config.json",
+  "rank_state_files": [],
+  "frozen_target_saved": false,
+  "config_sha256": "ce9ee6db0a2a27c08ff636510c90d87cac25872db01cdcba5a19496b142df4be",
+  "compressor_sha256": "cf1fe99c2f51f330b4b93055b0da4f930e1b01d1841d0b9b9825a8e4dc386732",
+  "model_numel": 2005757189,
+  "trainable_parameters": 2005757188,
+  "source_model_sha256": "c9bfdf6f2f383d6905969506aecd71764bdf1b25265da84945296230365bc0f4",
+  "model_size_bytes": 8023066782
+}

@@ -1,0 +1,15 @@
+{
+  "max_pending": 256,
+  "queue_timeout": 1800,
+  "request_timeout": 3600,
+  "probe_interval": 1,
+  "max_body_bytes": 1073741824,
+  "backends": [
+    {
+      "name": "h20-tp4",
+      "url": "http://127.0.0.1:30300",
+      "model": "Qwen3.8-27B",
+      "max_inflight": 2
+    }
+  ]
+}

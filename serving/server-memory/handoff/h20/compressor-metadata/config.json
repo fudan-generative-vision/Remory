@@ -1,0 +1,519 @@
+{
+  "batch_order": {
+    "base_batches": "immutable_context_ascending_whole_response_batches",
+    "cursor": "response_offset_in_epoch_permuted_batch_plan",
+    "epoch_seed": "seed_plus_zero_based_epoch",
+    "permutation": "python_random_Random_shuffle",
+    "rebatch_after_shuffle": false,
+    "schema": "fixed_length_bucket_batch_shuffle_v1",
+    "seed": 20260917
+  },
+  "canary_ordinals": [],
+  "compressor": {
+    "architecture": "DFlash2SummaryResidualCompressor",
+    "attention_layout": "four_local_source_reads_then_global_slot_only",
+    "candidate_selector": false,
+    "compression_ratio": 16,
+    "convolution_layout": "causal_groups_of_8_consecutive_slots_right_padded",
+    "depth_coordinate": "input_depth_raw_is_zero",
+    "dflash2": {
+      "block_size": 8,
+      "conv_group_size": 16,
+      "conv_kernel_size": 2,
+      "mask_token_id": 248070,
+      "selector_rank": 256,
+      "selector_top_k": 16,
+      "target_layer_ids": [
+        5,
+        19,
+        33,
+        47,
+        61
+      ]
+    },
+    "gradient_checkpointing": false,
+    "head_dim": 128,
+    "hidden_size": 5120,
+    "intermediate_size": 17408,
+    "layer_types": [
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention",
+      "full_attention"
+    ],
+    "local_window": 2048,
+    "max_depth": 8,
+    "num_attention_heads": 32,
+    "num_hidden_layers": 5,
+    "num_key_value_heads": 8,
+    "output_embedding_rms": 0.012734529562294483,
+    "selected_source_width": 25600,
+    "slot_padding_side": "left",
+    "summary_conditioning": "independent_slot_Q_summary_KV_after_source_attention",
+    "summary_gate_init": 0.001,
+    "target_hidden_size": 5120,
+    "target_layer_ids": [
+      5,
+      19,
+      33,
+      47,
+      61
+    ]
+  },
+  "context_curriculum": {
+    "columns": [
+      "ordinal",
+      "turn",
+      "context_tokens",
+      "history_tokens",
+      "target_tokens"
+    ],
+    "database_sha256": "3c4063b18736dfdaacb41936e02a8d405ac43cd538a7fe3b4b48c88ece729635",
+    "max_context_tokens": 98268,
+    "min_context_tokens": 8234,
+    "plan_sha256": "0486b8c108eba962deef5b86567ab2b19010f1438c1a5228953e4deb91dddc56",
+    "policy": {
+      "coordinate": "native_prefix_plus_complete_history_excluding_opening_and_current_answer",
+      "each_epoch": "same_ascending_order_no_shuffle",
+      "sort": [
+        "context_tokens",
+        "ordinal",
+        "turn"
+      ],
+      "unit": "response"
+    },
+    "responses": 31808,
+    "schema": "qwen38_residual_context_ascending_response_order_v1",
+    "selected_max_context_tokens": 98268,
+    "selected_min_context_tokens": 8234,
+    "selected_responses": 31368,
+    "target_tokens": 120196670,
+    "trajectories": 31808
+  },
+  "data_stats": {
+    "coding": {
+      "max_prefix_tokens": 841,
+      "max_response_tokens": 32781,
+      "responses": 27048,
+      "target_tokens": 94629661,
+      "trajectories": 27048
+    },
+    "xhigh": {
+      "max_prefix_tokens": 42,
+      "max_response_tokens": 17373,
+      "responses": 4760,
+      "target_tokens": 25567009,
+      "trajectories": 4760
+    }
+  },
+  "database_sha256": "3c4063b18736dfdaacb41936e02a8d405ac43cd538a7fe3b4b48c88ece729635",
+  "epochs": 5,
+  "format_version": 1,
+  "initialization": {
+    "data_cursor": "start_of_epoch_zero",
+    "global_step": 0,
+    "kind": "StageI_3B_checkpoint_8000",
+    "mask_embedding": "trained_stage1_mask_embedding",
+    "new_modules": [
+      "summary_attention",
+      "depth_embedding"
+    ],
+    "optimizer": "fresh_AdamW",
+    "seed": 20260917,
+    "stage1_checkpoint_used": true,
+    "stage1_global_step": 8000,
+    "weights_loaded": true
+  },
+  "manifest": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-data/perfectblend-coding/3ed8866b7c2c7a69a16e95feaf2df5837fb075dd/long-history-8k-v1.manifest.json",
+  "manifest_sha256": "36fb71315822ce137da9941177608d82e26e8d77b5b6bf6b3a2cc415e19dafea",
+  "objective": "full_vocabulary_reverse_KL_student_to_raw_teacher_T1_no_CE",
+  "position_weighting": {
+    "alpha": 1.0,
+    "coordinate": "original_response_token_offset_no_chunk_reset",
+    "formula": "(1+alpha*(1+position/tau)^(-power))/response_mean",
+    "power": 0.5,
+    "tau": 64.0
+  },
+  "pretrained": {
+    "directory": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-runs/20261006-qwen38-dflash2-stage1/pretrained",
+    "files": {
+      "config.json": "873e3556509b0da06e29654ba00d4944888d4b5e8a33afde25f7eb27d321e980",
+      "model.safetensors": "67fc76d68dc5a9415511a4f394ef744d67510cd20e93b37cc2cc7d28e4bab65c"
+    },
+    "repository": "incoai/Qwen3.8-27B-DFlash2",
+    "revision": "015e795645c74b1a0eeef3b570031fb62e769bc5"
+  },
+  "residual": {
+    "block_tokens": 1024,
+    "compression_ratio": 16,
+    "coverage": "derived_independent_compression_events_not_all_source_responses",
+    "data_derivation": {
+      "audit": {
+        "coding": {
+          "excluded_trajectories": 29250,
+          "long_history": 23451,
+          "long_prompt": 2789,
+          "max_history_tokens": 97967,
+          "min_history_tokens": 8192,
+          "multi_turn": 8848,
+          "reasoning_cut": 808,
+          "selected_source_trajectories": 8310,
+          "single_turn": 28712,
+          "source_trajectories": 37560
+        },
+        "xhigh": {
+          "excluded_trajectories": 37016,
+          "long_history": 2988,
+          "max_history_tokens": 32700,
+          "min_history_tokens": 8192,
+          "multi_turn": 4969,
+          "reasoning_cut": 1772,
+          "selected_source_trajectories": 3580,
+          "single_turn": 35627,
+          "source_trajectories": 40596
+        }
+      },
+      "builder_sha256": "ad7156471afbe528767affddd22afbf60944f30e7c9d520355972905406c6b62",
+      "native_opening_ids": [
+        248045,
+        74455,
+        198,
+        248068,
+        198
+      ],
+      "parent_database_sha256": "3f0db112c0d021cb2ba88dd4f94b6903ab77631fde3891bc2c154b26b833e26f",
+      "parent_manifest": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-data/perfectblend-coding/3ed8866b7c2c7a69a16e95feaf2df5837fb075dd/allturn.manifest.json",
+      "parent_manifest_sha256": "06638ce5b991763e48fd2182456c8231574436454f1f306e624495c28177b4ed",
+      "rules": {
+        "boundary": "all_response_positions_with_qualified_history_full_answer",
+        "cuts": "first_qualified_known_prefix_then_target_window_stride_while_in_think",
+        "history_coordinate": "compressible_tokens_excluding_system_tools_and_recent_tail",
+        "intra_reasoning": "single_turn_with_short_initial_history_only",
+        "min_continuation_tokens": 256,
+        "min_history_tokens": 8192,
+        "position_weighting": "original_response_absolute_token_offset",
+        "recent_tokens": 256,
+        "schema": "qwen38_length_filtered_history_and_reasoning_cuts_v1",
+        "student": "native_assistant_think_opening_plus_exact_recent_tail",
+        "summary": "compressed_history_only_with_synthetic_think_and_role_closure_at_cuts",
+        "target_window_tokens": 8192,
+        "target_windows": "nonoverlapping_within_each_source_response_no_synthetic_eot",
+        "teacher": "unchanged_native_prefix_through_target_window"
+      },
+      "summary_closing_ids": [
+        198,
+        248069,
+        198,
+        248046,
+        198
+      ],
+      "think_end_id": 248069
+    },
+    "gradient": "detach_all_parent_inputs_exact_local_VJP_every_retained_frontier_node",
+    "memory_budget": 4096,
+    "offload_after_tokens": 131072,
+    "policy": "budget_driven_oldest_adjacent_equal_depth_pyramid",
+    "projection_chunk_tokens": 64,
+    "raw_prefix": "native_system_and_tools",
+    "student": "summary_plus_soft_memory_plus_same_correct_answer_prefix",
+    "summary_version": "full_causal_history_rebuild_every_response_same_summary_all_levels",
+    "teacher": "uncompressed_history_plus_correct_answer_prefix",
+    "window_tokens": null
+  },
+  "schema": "qwen38_27b_summary_residual_serving_v1",
+  "seed": 20260917,
+  "stage1_checkpoint": {
+    "directory": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-runs/20261009-qwen38-dflash2-stage2-from-stage1-8000/stage1-checkpoint-00008000",
+    "files": {
+      "model.pt": "1c2a2a4f2a723c0951b8cff0dc2d900eac532f49898b19dbee050af575ba6343",
+      "run_config.json": "81e8f478308c9eca1ddc8f92d22102c7cba1e4191af7adcd772b31b1c6b184ea",
+      "trainer_state.json": "795cd6ba2fc1f9f297cf37af33991707aee788a104533f4dc375820c1138cffb"
+    },
+    "global_step": 8000,
+    "original_directory": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-runs/20261007-qwen38-dflash2-stage1-3b/train/checkpoint-00008000",
+    "run_contract_sha256": "d3e704a2bee868b0a1a467c6ae29d47be3946cc18be182fbe8a46b7a2a5ec90a"
+  },
+  "summary_cache_sha256": "f18c9b9188bb3a5e8600ced46835af5e7a7b4b096cc4c9762d0bf916ae3aed60",
+  "summary_contract": {
+    "compression_event_policy": {
+      "boundary": "all_response_positions_with_qualified_history_full_answer",
+      "cuts": "first_qualified_known_prefix_then_target_window_stride_while_in_think",
+      "history_coordinate": "compressible_tokens_excluding_system_tools_and_recent_tail",
+      "intra_reasoning": "single_turn_with_short_initial_history_only",
+      "min_continuation_tokens": 256,
+      "min_history_tokens": 8192,
+      "position_weighting": "original_response_absolute_token_offset",
+      "recent_tokens": 256,
+      "schema": "qwen38_length_filtered_history_and_reasoning_cuts_v1",
+      "student": "native_assistant_think_opening_plus_exact_recent_tail",
+      "summary": "compressed_history_only_with_synthetic_think_and_role_closure_at_cuts",
+      "target_window_tokens": 8192,
+      "target_windows": "nonoverlapping_within_each_source_response_no_synthetic_eot",
+      "teacher": "unchanged_native_prefix_through_target_window"
+    },
+    "data_derivation_sha256": "edc91072a13345aa0808ecf416fedbec1b99916c56e04814ae4f73931dfc61b8",
+    "database_sha256": "3c4063b18736dfdaacb41936e02a8d405ac43cd538a7fe3b4b48c88ece729635",
+    "end_token_id": 248046,
+    "generation_suffix_ids": [
+      198,
+      248045,
+      846,
+      198,
+      2523,
+      513,
+      15899,
+      264,
+      84323,
+      13251,
+      20871,
+      7439,
+      7788,
+      3461,
+      13,
+      4091,
+      264,
+      1375,
+      1783,
+      11782,
+      364,
+      2361,
+      436,
+      10673,
+      421,
+      668,
+      15227,
+      279,
+      3274,
+      13,
+      271,
+      21592,
+      25,
+      198,
+      12,
+      8852,
+      4936,
+      321,
+      1328,
+      10856,
+      1801,
+      198,
+      12,
+      42370,
+      2193,
+      11,
+      16484,
+      11,
+      466,
+      1156,
+      18738,
+      198,
+      12,
+      3437,
+      8198,
+      310,
+      381,
+      2725,
+      318,
+      7187,
+      1727,
+      7123,
+      8,
+      198,
+      12,
+      5586,
+      8751,
+      795,
+      11,
+      9989,
+      11,
+      466,
+      14619,
+      4221,
+      310,
+      2962,
+      271,
+      3320,
+      61446,
+      11,
+      31838,
+      11,
+      321,
+      10419,
+      383,
+      10163,
+      279,
+      1727,
+      436,
+      10673,
+      58304,
+      2962,
+      279,
+      944,
+      13,
+      198,
+      248046,
+      198,
+      248045,
+      74455,
+      198,
+      248068,
+      271,
+      248069,
+      271
+    ],
+    "generator_model": "/inspire/l20d/project/sais-bio/public/pretrained_models/Qwen/Qwen3.8-27B",
+    "max_summary_tokens": 8192,
+    "mode": "full_causal_prefix_rebuild_no_previous_summary",
+    "output_format": "json_handoff_v1",
+    "output_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "critical_data_examples_references": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 0,
+          "type": "array"
+        },
+        "current_progress": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "type": "array"
+        },
+        "important_context_constraints_preferences": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "type": "array"
+        },
+        "key_decisions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 0,
+          "type": "array"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 0,
+          "type": "array"
+        }
+      },
+      "required": [
+        "current_progress",
+        "key_decisions",
+        "important_context_constraints_preferences",
+        "next_steps",
+        "critical_data_examples_references"
+      ],
+      "type": "object"
+    },
+    "prompt": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work.\n",
+    "prompt_source": {
+      "binary_sha256": "bbc3341e44c9ead340ed9570c17be936e37870f570751a941699ffd04d672827",
+      "kind": "codex_cli_builtin_local_compact",
+      "prompt_sha256": "ab0c334d4faca17e3afbb9b16967c1b2fdcc7242a9a0880af57949fa236d6d07",
+      "version": "0.149.0"
+    },
+    "schema": "qwen38_compact_residual_fullprefix_summary_v1",
+    "student_memory_after_ids": [
+      248046,
+      198
+    ],
+    "student_memory_before_ids": [
+      248045,
+      846,
+      198,
+      1026,
+      3231,
+      2193,
+      4779,
+      25,
+      198
+    ],
+    "student_summary_after_ids": [
+      248046,
+      198
+    ],
+    "student_summary_before_ids": [
+      248045,
+      846,
+      198,
+      1905,
+      28336,
+      25,
+      198
+    ],
+    "summary_length_policy": "generation_cap_only_no_prompt_target",
+    "target_summary_tokens": 8192,
+    "temperature": 0.0,
+    "tokenizer_files": {
+      "chat_template.jinja": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041",
+      "merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+      "tokenizer.json": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+      "tokenizer_config.json": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27",
+      "vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+    }
+  },
+  "summary_delivery": "sealed_full_cache",
+  "summary_manifest": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-runs/20260917-compressor-only/stage2-qualified-summaries/summary.manifest.json",
+  "summary_manifest_sha256": "0e97f34ee086ea37a8688b2e382a1e07b3bf8ae427544abfd370910b43d8680e",
+  "target_lora": false,
+  "target_model": "/inspire/l20d/project/sais-bio/public/pretrained_models/Qwen/Qwen3.8-27B",
+  "target_trainable_parameters": 0,
+  "training_selection": {
+    "database_sha256": "3c4063b18736dfdaacb41936e02a8d405ac43cd538a7fe3b4b48c88ece729635",
+    "excluded_responses": 440,
+    "manifest": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-runs/20260917-compressor-only/stage2-qualified-summaries/selection.json",
+    "manifest_sha256": "21db60fbcaccab3f3289a482f9e64114772656fcda449206ae613f96fbe2e7e2",
+    "original_responses": 31808,
+    "policy": "all_and_only_cached_validated_independent_events_at_snapshot",
+    "schema": "qwen38_residual_qualified_summary_selection_v1",
+    "selected_responses": 31368,
+    "selected_target_tokens": 119026706,
+    "selection_sha256": "b463ebad3374c4527aaf3186877497fda4833f5db44c52cbeb9b12aae022f084",
+    "source_cache": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-data/perfectblend-coding/3ed8866b7c2c7a69a16e95feaf2df5837fb075dd/long-history-8k-v1-summaries.sqlite",
+    "source_manifest": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-data/perfectblend-coding/3ed8866b7c2c7a69a16e95feaf2df5837fb075dd/long-history-8k-v1.manifest.json",
+    "summary_manifest_sha256": "0e97f34ee086ea37a8688b2e382a1e07b3bf8ae427544abfd370910b43d8680e"
+  },
+  "target_family": "qwen38",
+  "target_model_type": "qwen3_5_multimodal",
+  "target_hidden_size": 5120,
+  "residual_serving_abi": {
+    "name": "summary_conditioned_residual_pyramid_v1",
+    "persistent_prefix": "native_system_and_tools",
+    "source_features": "selected_layer_outputs_under_full_raw_causal_prefix",
+    "summary_features": "final_normalized_hidden_summary_body_rows_under_native_prefix_and_summary_envelope",
+    "parent_features": "selected_layer_outputs_under_native_prefix_plus_adjacent_child_soft_rows",
+    "input_depth": "raw_is_zero_parent_uses_child_depth",
+    "partial_block": "real_source_rows_with_virtual_1024_slot_allocation_no_synthetic_features",
+    "summary_change": "rebuild_complete_raw_history_same_summary_all_levels",
+    "recovery": "native_prefix_plus_summary_envelope_plus_memory_envelope_plus_continuation",
+    "crop_policy": "never_crop_fail_closed"
+  },
+  "dflash2_architecture_config": "/inspire/l20d/project/sais-bio/public/hanchen/rm-qwen-eval/20261011-summhay-stage2-lr10-shuffle-14925/serving/dflash2_config.json",
+  "deployment_export": {
+    "source_schema": "qwen38_pretrained_dflash2_offline_stage2_shuffled_v2",
+    "source_global_step": 14925,
+    "source_run_contract_sha256": "e446be12a7dad1705db6ee813570404c34ace3e037f5cf45777fca2a3335d506",
+    "source_checkpoint": "/inspire/l20d/project/sais-bio/public/hanchen/rm-training-runs/20261010-qwen38-dflash2-stage2-lr10-shuffle/train/checkpoint-00014925",
+    "source_cursor": {
+      "chunk_index": 0,
+      "epoch": 2,
+      "event_index": 22188,
+      "shard_index": 0
+    },
+    "source_model_only": true
+  }
+}
