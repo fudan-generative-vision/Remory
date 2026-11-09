@@ -23,8 +23,8 @@ remory = "remory.cli:main"
 r-codex = "remory.codex.cli:main"
 
 [project.urls]
-Repository = "https://github.com/1ring2rta/Remory"
-Weights = "https://github.com/1ring2rta/Remory#models"
+Repository = "https://github.com/fudan-generative-vision/Remory"
+Weights = "https://github.com/fudan-generative-vision/Remory#models"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/remory"]

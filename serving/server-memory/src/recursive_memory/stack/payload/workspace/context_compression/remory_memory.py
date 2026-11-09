@@ -35,6 +35,10 @@ class RemoteMemory:
     def ndim(self):
         return 2
 
+    def __len__(self):
+        # Existing organizer code uses len(memory) to reserve soft-token slots.
+        return self.shape[0]
+
     def to_json(self):
         return dict(schema=CAPABILITY, backend=self.backend, handle=dict(self.descriptor))
 

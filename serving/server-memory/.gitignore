@@ -61,3 +61,6 @@ dist/
 /training/logs/
 /training/wandb/
 /training/.venv/
+
+# Synthetic local test output, never part of the inference payload.
+/src/recursive_memory/stack/payload/summary-attempts/

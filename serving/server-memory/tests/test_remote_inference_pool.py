@@ -205,6 +205,19 @@ def test_prepare_pool_config_keeps_source_and_uses_key_file(tmp_path):
                                    allow_http=True, stateless_only=True, **kwargs)
     assert stateless["backends"][-1]["stateless_only"] is True
     assert stateless["backends"][-1]["url"] == "http://remote.example/backends/h20"
+    pinned = module.build_config(source, url="https://remote.example/backends/h20",
+                                 memory_pinned_only=True, **kwargs)
+    assert pinned["backends"][-1]["memory_pinned_only"] is True
+    assert not pinned["backends"][-1].get("allow_tensor_recover", False)
+    assert "verified_artifact_pair" not in pinned["backends"][-1]
+    policy = "h20_online250_verified_tensor_pair_20261109_v1"
+    verified = module.build_config(source, url="https://remote.example/backends/h20",
+                                   memory_pinned_only=True, verified_artifact_pair=policy, **kwargs)
+    assert verified["backends"][-1]["verified_artifact_pair"] == policy
+    for options in ({"memory_pinned_only": True, "stateless_only": True},
+                    {"verified_artifact_pair": policy}):
+        with pytest.raises(ValueError):
+            module.build_config(source, url="https://remote.example/backends/h20", **options, **kwargs)
     assert source.read_bytes() == before
     for bad in ("https://remote.example/v1", "http://remote.example/backends/a", "https://user:password@remote.example/backends/a"):
         with pytest.raises(ValueError):

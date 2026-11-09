@@ -333,6 +333,18 @@ class Director:
                           'total_tokens': usage.get('prompt_tokens', 0) + usage.get('completion_tokens', 0)}}
 
 
+def director_thread_failure(path):
+    """Detect native worker failure even when the runtime process stays alive."""
+    with path.open('rb') as log:
+        log.seek(max(0, log.seek(0, os.SEEK_END) - 16384))
+        tail = log.read().decode(errors='replace')
+    # Native --json messages escape embedded newlines. Match only raw Rust
+    # stderr, never quoted history or a model's discussion of this error.
+    match = re.search(r"(?m)^thread '[^\n]+'(?: \(\d+\))? panicked at[^\n]*\n"
+                      r"failed to spawn thread: [^\n]+", tail)
+    return match.group(0) if match else None
+
+
 class NativeFolder:
     def __init__(self, binary, runtime, env, provider):
         self.binary, self.runtime, self.env, self.provider = binary, runtime, env, provider
@@ -475,6 +487,10 @@ class NativeFolder:
                 env = {k: v for k, v in self.env.items()
                        if not k.startswith(('CODEX_', 'OPENAI_', 'ANTHROPIC_'))}
                 env.update(CODEX_HOME=td, REMORY_CODEX_TOKEN=token)
+                # These runtimes orchestrate remote inference. Per-core thread
+                # pools multiply across concurrent sessions on large CPU hosts.
+                env.setdefault('TOKIO_WORKER_THREADS', '4')
+                env.setdefault('RAYON_NUM_THREADS', '4')
                 with (directory / 'director.log').open('wb') as log:
                     with self._active_lock:
                         if self._cancelled.is_set():
@@ -486,9 +502,16 @@ class NativeFolder:
                     # A long history can take many live, healthy decode turns.
                     # Request transports enforce inactivity timeouts; do not cancel
                     # useful work merely because the whole fold has aged 30 minutes.
+                    next_runtime_check = 0
                     while not director.ready.wait(.1):
                         if self._cancelled.is_set():
                             raise RuntimeError('Native folding cancelled')
+                        if time.monotonic() >= next_runtime_check:
+                            failure = director_thread_failure(directory / 'director.log')
+                            if failure:
+                                raise RuntimeError('Native folding thread creation failed; '
+                                    'original snapshot retained: ' + failure)
+                            next_runtime_check = time.monotonic() + 1
                         returncode = process.poll()
                         if returncode is not None:
                             diagnostics = []

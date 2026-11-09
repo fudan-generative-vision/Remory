@@ -1,0 +1,121 @@
+{
+  "date": "2026-11-09",
+  "scope": "Compressor-only measurements; no whole-request speedup or downstream-quality claim",
+  "local": {
+    "device": "NVIDIA L20D",
+    "batch_blocks": 4,
+    "workspace_mib": 1024,
+    "cases": [
+      {
+        "blocks": 16,
+        "summary_rows": 256,
+        "mixed_depth": false,
+        "automatic_limit": 4,
+        "serial_ms": 216.5824919939041,
+        "optimized_ms": 168.3795191347599,
+        "speedup": 1.286275748421432,
+        "transient_peak_mib": 407.8515625,
+        "normalized_rmse": 0.004838807042688131,
+        "min_slot_cosine": 0.9999526739120483
+      },
+      {
+        "blocks": 4,
+        "summary_rows": 4097,
+        "mixed_depth": false,
+        "automatic_limit": 4,
+        "serial_ms": 141.34860038757324,
+        "optimized_ms": 84.60438437759876,
+        "speedup": 1.6707006549060004,
+        "transient_peak_mib": 465.0703125,
+        "normalized_rmse": 0.00481420150026679,
+        "min_slot_cosine": 0.9999656081199646
+      },
+      {
+        "blocks": 8,
+        "summary_rows": 256,
+        "mixed_depth": true,
+        "automatic_limit": 4,
+        "serial_ms": 103.90690341591835,
+        "optimized_ms": 95.68081237375736,
+        "speedup": 1.0859743018279095,
+        "transient_peak_mib": 402.8515625,
+        "normalized_rmse": 0.005522044841200113,
+        "min_slot_cosine": 0.9999486804008484
+      }
+    ],
+    "note": "Float32 tiny-model tests match serial reference within tolerance; BF16 real-weight GEMM batching has <=0.56% normalized RMS difference on synthetic features. No downstream quality evaluation or whole-compact speed claim."
+  },
+  "h20_tp4": {
+    "cases": [
+      {
+        "source_tokens": 1024,
+        "summary_tokens": 37,
+        "source_device": "cuda",
+        "blocks": 1,
+        "bitwise_equal": true,
+        "serial": 0.02931157499551773,
+        "parallel": 0.030243733897805214,
+        "speedup": 0.9691784451801724
+      },
+      {
+        "source_tokens": 3073,
+        "summary_tokens": 37,
+        "source_device": "cuda",
+        "blocks": 4,
+        "bitwise_equal": true,
+        "serial": 0.09959567338228226,
+        "parallel": 0.04154510796070099,
+        "speedup": 2.3972900365668415
+      },
+      {
+        "source_tokens": 8193,
+        "summary_tokens": 512,
+        "source_device": "cuda",
+        "blocks": 9,
+        "bitwise_equal": true,
+        "serial": 0.22564123570919037,
+        "parallel": 0.09152014553546906,
+        "speedup": 2.4654816094205407
+      },
+      {
+        "source_tokens": 32769,
+        "summary_tokens": 512,
+        "source_device": "cuda",
+        "blocks": 33,
+        "bitwise_equal": true,
+        "serial": 0.7656939029693604,
+        "parallel": 0.23669089376926422,
+        "speedup": 3.2349951904604723
+      },
+      {
+        "source_tokens": 8193,
+        "summary_tokens": 4097,
+        "source_device": "cpu",
+        "blocks": 9,
+        "bitwise_equal": true,
+        "serial": 1.1304817199707031,
+        "parallel": 0.4004647135734558,
+        "speedup": 2.8229246713976535
+      }
+    ],
+    "source": "H20 acceptance package supplied by the remote operator; original serial baseline"
+  },
+  "rollout": {
+    "backends": 5,
+    "capacity": 18,
+    "sessions_restored": 19,
+    "thread_goal_run_preserved": true,
+    "normal_remote_tensor_transfer": false,
+    "legacy_import": "one-time, before checkpoint rewrite",
+    "observed_transients": [
+      "Local metadata probe timeout during a long prefill/compact workload; recovered.",
+      "Remote memory lease renewal HTTP 503; renewal subsequently succeeded. TTL 3600 seconds, renewal interval 60 seconds."
+    ]
+  },
+  "validation_scope": "Live checks tested deployed local batching and H20 parallel-node paths; public combined dispatch also requires its CPU regression tests. Remote samples are excluded from the local tensor trainer.",
+  "public_regression_validation": {
+    "unique_tests_passed": 261,
+    "unresolved_test_skips": 0,
+    "scope": "CPU protocol, gateway, encoder dispatch and arithmetic, checkpoint/child lifecycle, packaging, and native Codex tests using a fake inference service. Initial optional skips were rerun with required dependencies and explicit native binary. No GPU benchmark rerun during publication."
+  }
+}

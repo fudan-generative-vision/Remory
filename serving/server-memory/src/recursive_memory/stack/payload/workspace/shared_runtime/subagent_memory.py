@@ -72,12 +72,12 @@ def read_checkpoint(path, generator, *, parent_id, child_id):
     if (not isinstance(body, list) or not body or any(type(v) is not int or v < 0 for v in body)
             or memory.ndim != 2 or memory.shape[1] != generator.deployment["compressor"]["target_hidden_size"]
             or memory.shape[0] <= 0
-            or (generator.memory_budget is not None and memory.shape[0] > generator.memory_budget)
+            or (generator.residual["memory_budget"] is not None and memory.shape[0] > generator.residual["memory_budget"])
             or (isinstance(memory, torch.Tensor)
                 and (not memory.is_floating_point() or not bool(torch.isfinite(memory).all())))
             or len(depths) != memory.shape[0] or any(type(v) is not int or v <= 0 for v in depths)):
         if getattr(generator, "server_memory", False):
-            generator._release_retired([memory])
+            generator.client.release_memory(memory)
         raise RuntimeError("invalid sub-agent summary/residual geometry")
     if getattr(generator, "server_memory", False) and isinstance(memory, torch.Tensor):
         memory = generator.client.import_memory(memory)
@@ -100,7 +100,7 @@ class SubagentMemoryMixin:
             if getattr(self, "server_memory", False):
                 current = [self.memory, *(e["memory"] for e in self._folded_branches)]
                 if all(checkpoint["memory"] is not v for v in current):
-                    self._release_retired([checkpoint["memory"]])
+                    self.client.release_memory(checkpoint["memory"])
             return False
         _, prefix, closed = self._text_history(messages, episode_id)
         entry = dict(checkpoint, offset=len(closed))
@@ -117,7 +117,10 @@ class SubagentMemoryMixin:
                 self._active_text_context(prefix, closed)
             finally:
                 if getattr(self, "server_memory", False):
-                    self._release_retired([checkpoint["memory"]])
+                    # This candidate never entered the parent's checkpoint.
+                    # Release its handle now; the child's preserved snapshot
+                    # remains available for another admission attempt.
+                    self.client.release_memory(checkpoint["memory"])
             raise
         self._folded_ids.add(fold_id)
         self._runtime_event(dict(event="subagent_memory_folded", policy=POLICY,

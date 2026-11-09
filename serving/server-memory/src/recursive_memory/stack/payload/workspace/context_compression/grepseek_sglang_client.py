@@ -748,6 +748,9 @@ class GrepSeekSGLangClient:
             if request_id is not None:
                 try:
                     self._abort_request(request_id)
+                    # Research transport recovery may retry only when cleanup
+                    # positively acknowledged this exact request's termination.
+                    error.sglang_request_drained = True
                 except BaseException as abort_error:
                     add_note = getattr(error, "add_note", None)
                     if callable(add_note):

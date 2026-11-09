@@ -35,7 +35,7 @@ class ServerResidualSGLangClient(SummaryResidualSGLangClient):
         self._memory_hook_digest = handle_info["hook_abi_digest"]
         receipt = super().attest_residual_server(checkpoint, info)
         receipt["transport"] = CAPABILITY
-        receipt["memory_budget"] = None
+        receipt["memory_budget"] = self._residual_config["residual"]["memory_budget"]
         self._residual_attestation = receipt
         interval = min(60., float(handle_info["ttl_seconds"]) / 3)
         def renew():
@@ -204,8 +204,10 @@ class ServerResidualSGLangClient(SummaryResidualSGLangClient):
             self._retired_memory.pop(key, None)
 
     def build_residual_memory(self, *args, **kwargs):
-        # A serving policy, deliberately independent of the frozen training budget.
-        kwargs["memory_budget"] = None
+        # Transport must preserve the caller's planning policy. The hybrid
+        # runtime may supply a request-scoped minimum same-depth frontier budget.
+        # Unlimited planning remains available only when explicitly requested.
+        kwargs.setdefault("memory_budget", self._residual_config["residual"]["memory_budget"])
         before = set(self.owned_memory())
         final = None
         try:

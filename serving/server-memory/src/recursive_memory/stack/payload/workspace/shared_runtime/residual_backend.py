@@ -9,8 +9,8 @@ Cross-summary recursive reconditioning is an inference extension to training.
 Logical recursion is unbounded; serving saturates only the learned depth
 embedding coordinate, without resetting lineage or dropping old soft memory.
 Ordinary agent generations keep the paired tools/parser/recovery/archive
-behavior. Compatible endpoints retain memory tensors on the server; legacy
-endpoints keep the original CPU transport when server memory is not required.
+behavior. REMORY_SERVER_MEMORY=1 selects server-owned references on an explicitly
+pinned endpoint; legacy sessions retain their CPU-memory transport.
 """
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ class ResidualGenerator(SubagentMemoryMixin, SummaryOnlyGenerator):
         self.summary_contract = deployment["summary_contract"]
         self.residual = deployment["residual"]
         self.server_memory = getattr(client, "server_memory", False)
-        self.memory_budget = None if self.server_memory else self.residual["memory_budget"]
+        self._deferred_retire = {}
         self.memory = None
         self.summary_ids = None
         self.consumed_ids = None
@@ -254,6 +254,11 @@ class ResidualGenerator(SubagentMemoryMixin, SummaryOnlyGenerator):
             memory_embeddings=self._context_memory,
             expected_hidden_size=self.deployment["compressor"]["target_hidden_size"], **kwargs)
 
+    @property
+    def memory_budget(self):
+        # Request-scoped remory_budget overrides must be observed dynamically.
+        return self.residual["memory_budget"]
+
     def summarize(self, **kwargs):
         if not self.server_memory:
             return self._summarize_impl(**kwargs)
@@ -261,10 +266,13 @@ class ResidualGenerator(SubagentMemoryMixin, SummaryOnlyGenerator):
         try:
             return self._summarize_impl(**kwargs)
         except BaseException:
+            # New failed candidates were never published in a caller journal.
             owned = self.client.owned_memory()
-            self._release_retired([owned[k] for k in set(owned) - before])
-            # A derived concatenation may have been created during rendering.
-            # The active main and child roots are still owned and can rebuild it.
+            for key in set(owned) - before:
+                try:
+                    self.client.release_memory(owned[key])
+                except Exception as exc:
+                    self._runtime_event(dict(event="uncommitted_memory_cleanup_failed", error=str(exc)))
             self._context_memory = None
             self._context_memory_key = None
             raise
@@ -321,7 +329,7 @@ class ResidualGenerator(SubagentMemoryMixin, SummaryOnlyGenerator):
                               source_memory_depths=list(self._context_depths))
                          if self._context_memory is not None else {})
             built = self.client.build_residual_memory(prefix, active[len(prefix):], body,
-                contract=self.summary_contract, memory_budget=self.memory_budget,
+                contract=self.summary_contract, memory_budget=self.residual["memory_budget"],
                 block_tokens=self.residual["block_tokens"], max_depth=self.deployment["compressor"]["max_depth"],
                 **recursive)
             memory = built["memory_embeddings"]
@@ -371,17 +379,33 @@ class ResidualGenerator(SubagentMemoryMixin, SummaryOnlyGenerator):
         return summary
 
     def _release_retired(self, values):
+        """Defer all old-handle retirement until the parent journal is durable."""
         if not self.server_memory:
             return
         from context_compression.remory_memory import RemoteMemory
-        unique = {v.descriptor["handle_id"]: v for v in values if isinstance(v, RemoteMemory)}
-        for value in unique.values():
+        if not hasattr(self, '_deferred_retire'):
+            self._deferred_retire = {}
+        for value in values:
+            if isinstance(value, RemoteMemory):
+                self._deferred_retire[value.descriptor['handle_id']] = value
+
+    def commit_remote_retirements(self):
+        if not self.server_memory:
+            return
+        from context_compression.remory_memory import RemoteMemory
+        live = [self.memory, self._context_memory,
+                *((getattr(self, '_prepared', None) or {}).get(k) for k in ['memory']),
+                *(e['memory'] for e in self._folded_branches)]
+        retained = {v.descriptor['handle_id'] for v in live if isinstance(v, RemoteMemory)}
+        for key, value in list(self._deferred_retire.items()):
+            if key in retained:
+                self._deferred_retire.pop(key, None)
+                continue
             try:
                 self.client.release_memory(value)
+                self._deferred_retire.pop(key, None)
             except Exception as exc:
-                # The new generation is already committed. Keep failed cleanup
-                # owned by the client for retry/close; never roll back the commit.
-                self._runtime_event(dict(event="memory_release_failed", error=str(exc)))
+                self._runtime_event(dict(event='memory_release_failed', error=str(exc)))
 
     def install(self, *, episode_id, target_completed_rounds, summary):
         self._ensure_open()
@@ -394,8 +418,7 @@ class ResidualGenerator(SubagentMemoryMixin, SummaryOnlyGenerator):
                 or target_completed_rounds < self.consumed_rounds):
             raise RuntimeError("residual compact summary/history identity mismatch")
         retired = [self.memory, self._context_memory]
-        retired.extend(entry["memory"] for entry in self._folded_branches
-                       if entry["fold_id"] in prepared.get("fold_ids", ()))
+        retired.extend(e["memory"] for e in self._folded_branches if e["fold_id"] in prepared.get("fold_ids", ()))
         self._history.commit(prepared["messages"], episode_id)
         self._consume_prepared_folds(prepared)
         self.memory, self.summary_ids = prepared["memory"], list(prepared["body"])
@@ -409,6 +432,7 @@ class ResidualGenerator(SubagentMemoryMixin, SummaryOnlyGenerator):
         self._prepared = None
         if self.server_memory:
             self._context_memory = None
+            self._context_memory_key = None
             self._context_depths = []
             self.memory_positions = []
             self._release_retired([v for v in retired if v is not self.memory])
@@ -523,7 +547,9 @@ class ResidualBackend(LiveR2EActBackend):
                 assert_residual_concurrency,
             )
             from .discrete_concurrency import validate_count
-            concurrency = validate_count(self.serving_concurrency)
+            import os
+            server_memory_required = os.environ.get("REMORY_SERVER_MEMORY") == "1"
+            concurrency = validate_count(int(os.environ.get("REMORY_SERVING_CONCURRENCY", self.serving_concurrency)))
             serving_info = get_server_info(self.config.sglang_url, cancel_event=self._closing)
             if concurrency > 1:
                 assert_residual_concurrency(serving_info, concurrency)
@@ -547,21 +573,9 @@ class ResidualBackend(LiveR2EActBackend):
             deployment = load_residual_serving_contract(self.config.checkpoint)
             from context_compression.remory_sglang_client import ServerResidualSGLangClient
             from context_compression.remory_memory import CAPABILITY
-            serving_url = self.config.sglang_url
-            memory_backends = (serving_info.get("shared_gateway") or {}).get("memory_backends", [])
-            if memory_backends:
-                chosen = min(memory_backends, key=lambda b: (b["load"] / b["capacity"], b["name"]))
-                serving_url = serving_url.rstrip("/") + "/backends/" + chosen["name"]
-                serving_info = get_server_info(serving_url, cancel_event=self._closing)
-            # Native children derive their config from this backend, retaining
-            # affinity rather than independently choosing another replica.
-            from dataclasses import replace
-            self.config = replace(self.config, sglang_url=serving_url)
-            import os
-            use_server_memory = CAPABILITY in serving_info.get("request_capabilities", [])
-            if os.environ.get("REMORY_SERVER_MEMORY") == "1" and not use_server_memory:
-                raise RuntimeError("server memory required but backend lacks its capability")
-            residual_client = ServerResidualSGLangClient if use_server_memory else SummaryResidualSGLangClient
+            if server_memory_required and CAPABILITY not in serving_info.get("request_capabilities", []):
+                raise RuntimeError("Pinned backend does not support required server memory")
+            residual_client = ServerResidualSGLangClient if server_memory_required else SummaryResidualSGLangClient
             class StreamingResidualClient(GenerationStreamingMixin, residual_client):
                 pass
 
@@ -569,12 +583,12 @@ class ResidualBackend(LiveR2EActBackend):
             if not self.config.compressor_enabled:
                 from .discrete_sglang_client import StreamingDiscreteSGLangClient
                 client_type = StreamingDiscreteSGLangClient
-            client = client_type(serving_url,
+            client = client_type(self.config.sglang_url,
                 request_timeout=self.config.request_timeout_seconds, enable_request_cancellation=True)
-            wait_for_health(serving_url, cancel_event=self._closing)
+            wait_for_health(self.config.sglang_url, cancel_event=self._closing)
             # Re-read after acquiring the serving lock; never reuse a stale
             # pre-lock identity. Use the same bounded/cancellable transport.
-            info = get_server_info(serving_url, cancel_event=self._closing)
+            info = get_server_info(self.config.sglang_url, cancel_event=self._closing)
             if concurrency > 1:
                 assert_residual_concurrency(info, concurrency)
             residual_attestation = (client.attest_residual_server(self.config.checkpoint, info)
@@ -587,8 +601,6 @@ class ResidualBackend(LiveR2EActBackend):
             for key in ("context_length", "max_total_num_tokens", "max_req_input_len"):
                 if type(info.get(key)) is not int or info[key] <= 0:
                     raise RuntimeError(f"SGLang is missing a valid {key}")
-            # Tokenization uses the local verified files, independent of the
-            # remote host's filesystem layout. The client attests both above.
             model = Path(deployment["target_model"])
             model_config = json.loads((model / "config.json").read_text())
             if "Qwen3_5ForConditionalGeneration" not in model_config.get("architectures", []):
@@ -643,11 +655,9 @@ class ResidualBackend(LiveR2EActBackend):
                 serving_concurrency=concurrency,
                 max_running_requests=info.get("max_running_requests")))
         except BaseException:
+            if self._generator is None and client is not None and getattr(client, "server_memory", False):
+                client.close_memory()
             self.close()
-            if self._generator is None and client is not None:
-                close = getattr(client, "close_memory", None)
-                if close is not None:
-                    close()
             raise
 
     def _record_summary_generation(self, receipt):
@@ -676,13 +686,12 @@ class ResidualBackend(LiveR2EActBackend):
         self._generator.pending_images = None
 
     def close(self):
+        generator = self._generator
         try:
             super().close()
         finally:
-            if self._generator is not None:
-                close = getattr(self._generator.client, "close_memory", None)
-                if close is not None:
-                    close()
+            if generator is not None and getattr(generator, 'server_memory', False):
+                generator.client.close_memory()
 
     def configure_pending_tool_images(self, *, images):
         self._generator.configure_pending_tool_images(images=images)

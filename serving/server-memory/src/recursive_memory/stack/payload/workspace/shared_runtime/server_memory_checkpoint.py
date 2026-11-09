@@ -85,3 +85,55 @@ def load_local_snapshot(remote):
             or not tensor.is_floating_point() or not bool(torch.isfinite(tensor).all())):
         raise ValueError("invalid saved remote memory")
     return tensor
+
+
+def save_reference_checkpoint(path, state, client):
+    """Publish references durably before retiring the previous snapshots.
+
+    Keep a copy of the old checkpoint when migrating a legacy tensor state.
+    A caller with a ResidualGenerator invokes commit_remote_retirements only
+    after this function returns. Never unpickle checkpoints from other users.
+    """
+    import os
+    import pickle
+    import tempfile
+    from pathlib import Path
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if path.is_symlink():
+        raise ValueError("checkpoint cannot be a symlink")
+    packed, snapshots = pack_memory_state(state, client)
+    payload = dict(schema="remory_reference_checkpoint_v1", backend=client.base_url, state=packed)
+    name = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".remory-checkpoint-", delete=False) as f:
+            name = f.name
+            os.fchmod(f.fileno(), 0o600)
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(name, path)
+        name = None
+        fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    finally:
+        if name is not None:
+            os.unlink(name)
+    client.checkpoint_saved(snapshots)
+
+
+def load_reference_checkpoint(path, client):
+    """Restore only a private, owned checkpoint on its saved backend."""
+    import os
+    import pickle
+    from pathlib import Path
+    path = Path(path)
+    if path.is_symlink() or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
+        raise ValueError("checkpoint must be a private owned file")
+    payload = pickle.loads(path.read_bytes())
+    if payload.get("schema") != "remory_reference_checkpoint_v1" or payload.get("backend") != client.base_url:
+        raise ValueError("checkpoint must resume on its original pinned backend")
+    return restore_memory_state(payload["state"], client)

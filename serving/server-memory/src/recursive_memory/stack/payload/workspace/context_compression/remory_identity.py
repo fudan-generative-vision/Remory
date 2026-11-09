@@ -55,6 +55,10 @@ def loaded_identity():
 def check_server_identity(info, checkpoint, config):
     if FIELD not in info:
         return False  # Legacy endpoints retain their original path checks.
-    if validate_identity(info[FIELD]) != artifact_identity(checkpoint, config):
-        raise RuntimeError("remote Remory compressor/contract/target metadata differs from the local pin")
+    observed = validate_identity(info[FIELD])
+    expected = artifact_identity(checkpoint, config)
+    if observed != expected:
+        from .h20_equivalence import verified_pair
+        if not verified_pair(expected, info, config):
+            raise RuntimeError("remote Remory compressor/contract/target metadata differs from the local pin")
     return True

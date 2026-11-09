@@ -125,7 +125,7 @@
       "executable": false
     },
     "sglang_overlay/python/sglang/srt/managers/scheduler_output_processor_mixin.py": {
-      "sha256": "af40efcd2ea67bf2a245a59eff1f5d9a91c749c6496e21c5714b7216bd3ebce2",
+      "sha256": "28b699d2fd982efba8a632d93fb84b79fe097501bc6abe6a45d6955b0a4ff79a",
       "executable": false
     },
     "sglang_overlay/python/sglang/srt/managers/scheduler_update_weights_mixin.py": {
@@ -324,6 +324,34 @@
       "sha256": "2f170c6e97f595109cc0697648a2b7635e22a28424b03346de834272ec548997",
       "executable": false
     },
+    "summary-attempts/3e23e8160039594a33894f65/575a774aef7ec50875a11b5bf7e6454d55879e142ba93c2ba66539d253486a6e/000.json": {
+      "sha256": "043768d1be50313c1a5883f9fb754deacc89dd5ac8b3a8e0ebcd9c851d4c00a7",
+      "executable": false
+    },
+    "summary-attempts/ca978112ca1bbdcafac231b3/575a774aef7ec50875a11b5bf7e6454d55879e142ba93c2ba66539d253486a6e/000.json": {
+      "sha256": "043768d1be50313c1a5883f9fb754deacc89dd5ac8b3a8e0ebcd9c851d4c00a7",
+      "executable": false
+    },
+    "summary-attempts/ddc9e669194254cef019a29d/575a774aef7ec50875a11b5bf7e6454d55879e142ba93c2ba66539d253486a6e/000.json": {
+      "sha256": "043768d1be50313c1a5883f9fb754deacc89dd5ac8b3a8e0ebcd9c851d4c00a7",
+      "executable": false
+    },
+    "summary-attempts/e47125968b3b71049fbc4802/57da44066dc24b3b8efbd484c2a8ea257c8caa044eec3ecc08efef8b17ba3b47/000.json": {
+      "sha256": "043768d1be50313c1a5883f9fb754deacc89dd5ac8b3a8e0ebcd9c851d4c00a7",
+      "executable": false
+    },
+    "summary-attempts/e47125968b3b71049fbc4802/676c5a8c227295f3e1c4b66b8ede6caddcf66050e980419134b7df3b78e353c7/000.json": {
+      "sha256": "043768d1be50313c1a5883f9fb754deacc89dd5ac8b3a8e0ebcd9c851d4c00a7",
+      "executable": false
+    },
+    "summary-attempts/e47125968b3b71049fbc4802/73b0fa56d2a2850d1ca173f6937938dc286002192dc1f3d333d26c3514dfe1e7/000.json": {
+      "sha256": "043768d1be50313c1a5883f9fb754deacc89dd5ac8b3a8e0ebcd9c851d4c00a7",
+      "executable": false
+    },
+    "summary-attempts/e47125968b3b71049fbc4802/c8f6d44851bd2296b9085558be1a3e1a0341bc5c4fac20bfde44f5660762f2d6/000.json": {
+      "sha256": "043768d1be50313c1a5883f9fb754deacc89dd5ac8b3a8e0ebcd9c851d4c00a7",
+      "executable": false
+    },
     "workspace/SPECFORGE_LICENSE": {
       "sha256": "da25818d68a3da676fed16a019beadd6b12f5e4d59ade85840c23a6070240323",
       "executable": false
@@ -481,7 +509,7 @@
       "executable": false
     },
     "workspace/context_compression/grepseek_sglang_client.py": {
-      "sha256": "27f2632359241ee647b26dd6db2dec859daa8dd5f20dd7f3d64735b6ea69ab06",
+      "sha256": "70dd67610cb5ca35f4f09f6e3df5f346a3f7a7e74e486e6796a5a4dc69b26acb",
       "executable": false
     },
     "workspace/context_compression/grepseek_sglang_live.py": {
@@ -490,6 +518,10 @@
     },
     "workspace/context_compression/grepseek_tool.py": {
       "sha256": "db244d1a9a2428bb9df2f68272b76aa8cd91e9923d0992757da7200039bc33cd",
+      "executable": false
+    },
+    "workspace/context_compression/h20_equivalence.py": {
+      "sha256": "29ec113016896747c07cedbfabda9a5d840b06d4d320999537bd57f19a583943",
       "executable": false
     },
     "workspace/context_compression/layout.py": {
@@ -529,7 +561,7 @@
       "executable": false
     },
     "workspace/context_compression/qwen38_residual_modeling.py": {
-      "sha256": "558adc6f350406c3b399d3ebc553582543f6aeb6edae659d2fe9a65b54b85dee",
+      "sha256": "13ae730b8618e206dba60e52ef1833121c73e0b9f2988eb56bdde37368271e75",
       "executable": false
     },
     "workspace/context_compression/qwen38_residual_pyramid.py": {
@@ -545,7 +577,7 @@
       "executable": false
     },
     "workspace/context_compression/qwen38_residual_sglang_hook.py": {
-      "sha256": "446b9f6a21796d482a2eea4d16ced20e548f00d79675c26fcaa612f9293d369d",
+      "sha256": "820d7a1ab3899e15b6abb7e602309587cc01573fea74e009733364b098410444",
       "executable": false
     },
     "workspace/context_compression/r2eact_compression_chain.py": {
@@ -565,11 +597,15 @@
       "executable": false
     },
     "workspace/context_compression/remory_identity.py": {
-      "sha256": "8633a8a38943a75d9e2d8ec5d0cbfa7f22a3e87b4b5f6a7f2505519bf61689f3",
+      "sha256": "7e08beff9bf2498ecdacef1c4a50e5a3ed4c873fc21838c5dbf69b5ec4c7cccf",
       "executable": false
     },
     "workspace/context_compression/remory_memory.py": {
-      "sha256": "3567a6ace42fedd1f5a58cdcf8328264cd82cd2968a640eaf02ee8240962fe6e",
+      "sha256": "d94dda684f033fe593bd9e30b5eb0600520b35144de4e073a10075e385ab8b93",
+      "executable": false
+    },
+    "workspace/context_compression/remory_parallel_encode.py": {
+      "sha256": "2deef9b9bf86a1946e2fa8269057299bd60622724cba0965277ea7d683528a5e",
       "executable": false
     },
     "workspace/context_compression/remory_public_release.py": {
@@ -577,7 +613,7 @@
       "executable": false
     },
     "workspace/context_compression/remory_sglang_client.py": {
-      "sha256": "b4eb37e069cbcf8e393016f44cd46c6bc07acf87c7115aa026a85524c477955e",
+      "sha256": "bac6bc2baac6611b7128148ddf77d9175d4b4e7bedefdc6d419cf41670b5f9b9",
       "executable": false
     },
     "workspace/context_compression/rollout_grepseek.py": {
@@ -721,11 +757,11 @@
       "executable": false
     },
     "workspace/shared_runtime/residual_backend.py": {
-      "sha256": "aac6b8169054e4522ca98221142fe2f2df9f580b755d894d649ec73eaf11613f",
+      "sha256": "4e9997e6ba832ad2a5e374f51842069cbd9c92b2024f890bb67f3ab82d01807f",
       "executable": false
     },
     "workspace/shared_runtime/residual_preflight.py": {
-      "sha256": "5f56bd71ffc8dde36ccfe614c134e3c3da4e30fdb247d5d50ec9d7fb11c88c55",
+      "sha256": "f7cb2bf45b5cdecd7a304fcb82e94ffdbff240870568b565b740e9529deeb1c7",
       "executable": false
     },
     "workspace/shared_runtime/runner.py": {
@@ -737,7 +773,7 @@
       "executable": false
     },
     "workspace/shared_runtime/server_memory_checkpoint.py": {
-      "sha256": "5168e01e92759882423b05146fc8d34cf4ccde340ef06b61b0857397ffd5e3d6",
+      "sha256": "5e0ae3abcbc016fa98bfd30deb7e6686b78e33c5fdb694349225495fb8769c32",
       "executable": false
     },
     "workspace/shared_runtime/setup_runtime.sh": {
@@ -745,7 +781,7 @@
       "executable": true
     },
     "workspace/shared_runtime/sglang_streaming.py": {
-      "sha256": "2ceea6b247ad3ce2090d44420f2f280fbef1a568f47adce1524c19962b09d1e0",
+      "sha256": "ea2f62b7e9e6b29a5b6ba57d9cfd33e7d3729c42a856466fd687a3ec2d9c9b7d",
       "executable": false
     },
     "workspace/shared_runtime/storage.py": {
@@ -753,7 +789,7 @@
       "executable": false
     },
     "workspace/shared_runtime/subagent_memory.py": {
-      "sha256": "9bb3926bd352e4ff382466ae7c75cd55a2001cbcd978f1356e9beb5f9a14aa44",
+      "sha256": "0a531bae9c4c3ef5037d00dad9985dc42d596f16c95ba1692ae9962b83d04485",
       "executable": false
     },
     "workspace/shared_runtime/subagents.py": {

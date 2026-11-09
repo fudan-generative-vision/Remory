@@ -41,9 +41,10 @@ class TinyCompressor(torch.nn.Module):
         self.weight = torch.nn.Parameter(torch.ones(1))
 
     def forward(self, features, mask, *, summary_features, input_depth, **kwargs):
-        value = features.mean(1, keepdim=True) + summary_features.mean(1, keepdim=True) + input_depth
-        return SimpleNamespace(embeddings=value.expand(1, 64, 2),
-                               attention_mask=torch.ones(1, 64, dtype=torch.bool))
+        mean = (features * mask[..., None]).sum(1, keepdim=True) / mask.sum(1)[:, None, None]
+        value = mean + summary_features.mean(1, keepdim=True) + input_depth
+        return SimpleNamespace(embeddings=value.expand(features.shape[0], 64, 2),
+                               attention_mask=torch.ones(features.shape[0], 64, dtype=torch.bool))
 
 
 class Engine:
@@ -81,7 +82,7 @@ class Engine:
         meta = {}
         if output.hidden_states is not None:
             meta["hidden_states"] = [output.hidden_states.tolist()]
-        if output.customized_info:
+        if output.customized_info and GPU_MEMORY_HANDLE_META_KEY in output.customized_info:
             meta[GPU_MEMORY_HANDLE_META_KEY] = output.customized_info[GPU_MEMORY_HANDLE_META_KEY][0]
         return {"meta_info": meta}
 
@@ -124,7 +125,7 @@ def build(c, history, **kwargs):
 
 def test_unbounded_frontier_exceeds_old_4096_cap_without_tensor_wire(engine):
     c = client(engine)
-    result = build(c, [3] * (65 * 1024))
+    result = build(c, [3] * (65 * 1024), memory_budget=None)
     memory = result["memory_embeddings"]
     assert isinstance(memory, RemoteMemory) and memory.shape == (4160, 2)
     assert result["receipt"]["memory_budget"] is None
@@ -227,7 +228,8 @@ def make_generator(tmp_path, engine, name):
     c.generate_with_memory = text_client.generate_with_memory
     generator.client = c
     generator.server_memory = True
-    generator.memory_budget = None
+    generator.residual["memory_budget"] = None
+    generator._test_checkpoint = tmp_path / name / "checkpoint.pkl"
     return generator, helpers
 
 
@@ -236,6 +238,9 @@ def compact(generator, messages):
                                    round_index=len(messages)//2)
     generator.install(episode_id=generator.episode_id, target_completed_rounds=len(messages)//2-1,
                       summary=summary)
+    from shared_runtime.server_memory_checkpoint import save_reference_checkpoint
+    save_reference_checkpoint(generator._test_checkpoint, {"memory": generator.memory}, generator.client)
+    generator.commit_remote_retirements()
     return summary
 
 
@@ -383,12 +388,16 @@ def test_retired_disk_checkpoint_cleanup_is_retried(engine):
 def test_failed_child_admission_releases_loaded_handle(engine, tmp_path):
     g, helpers = make_generator(tmp_path, engine, "main")
     memory = build(g.client, [3] * 1024)["memory_embeddings"]
+    saved = g.client.save_memory(memory, preserve=True)
     g.server_info = dict(context_length=8, max_total_num_tokens=8, max_req_input_len=8)
     checkpoint = dict(memory=memory, fold_id="rejected", summary_ids=[12], depths=[1]*64, child_id="child")
     with pytest.raises(RuntimeError, match="compaction before admission"):
         g.add_subagent_checkpoint(checkpoint, messages=helpers["history"](), episode_id="main")
     assert not g._folded_branches
     assert engine.registry.stats()["entries"] == 0
+    restored = g.client.load_memory(saved)
+    assert restored.shape == memory.shape
+    g.client.release_memory(restored)
 
 
 def test_launcher_restores_saved_endpoint_without_environment():

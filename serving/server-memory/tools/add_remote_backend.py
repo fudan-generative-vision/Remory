@@ -12,7 +12,11 @@ from recursive_memory.stack.gateway import load_config, BACKEND_ROUTE
 
 
 def build_config(source, *, url, key_file, checkpoint, name, model, capacity,
-                 stateless_only=False, allow_http=False):
+                 stateless_only=False, allow_http=False, memory_pinned_only=False, verified_artifact_pair=None):
+    if memory_pinned_only and stateless_only:
+        raise ValueError("pinned memory requires a full backend")
+    if verified_artifact_pair and not memory_pinned_only:
+        raise ValueError("verified artifact pairs require memory-pinned routing")
     url = url.rstrip("/")
     if url.endswith("/v1"):
         url = url[:-3]
@@ -33,7 +37,9 @@ def build_config(source, *, url, key_file, checkpoint, name, model, capacity,
     config["backends"].append(dict(name=name, url=url, model=model,
         max_inflight=capacity, api_key_file=str(Path(key_file).expanduser().resolve()),
         local_checkpoint=str(checkpoint), supports_local_encoder_versions=False,
-        stateless_only=stateless_only))
+        stateless_only=stateless_only, memory_pinned_only=memory_pinned_only))
+    if verified_artifact_pair:
+        config["backends"][-1]["verified_artifact_pair"] = verified_artifact_pair
     return config
 
 
@@ -47,12 +53,15 @@ def main():
     p.add_argument("--model", default="Qwen3.8-27B")
     p.add_argument("--max-inflight", type=int, required=True)
     p.add_argument("--stateless-only", action="store_true", help="Admit ordinary generation only; require matching base identity, not compressor identity")
+    p.add_argument("--memory-pinned-only", action="store_true", help="Route ordinary generation freely; require an explicit backend for memory")
+    p.add_argument("--verified-artifact-pair", choices=["h20_online250_verified_tensor_pair_20261109_v1"], help="Opt in to the exact documented, proof-pinned artifact pair")
     p.add_argument("--allow-http", action="store_true", help="Explicitly allow a remote HTTP URL")
     p.add_argument("--output", type=Path, required=True)
     args = p.parse_args()
     result = build_config(args.config, url=args.base_url, key_file=args.api_key_file,
         checkpoint=args.local_checkpoint, name=args.name, model=args.model, capacity=args.max_inflight,
-        stateless_only=args.stateless_only, allow_http=args.allow_http)
+        stateless_only=args.stateless_only, allow_http=args.allow_http,
+        memory_pinned_only=args.memory_pinned_only, verified_artifact_pair=args.verified_artifact_pair)
     # Exclusive creation also protects the source config from accidental overwrite.
     with args.output.open("x") as out:
         json.dump(result, out, indent=2)

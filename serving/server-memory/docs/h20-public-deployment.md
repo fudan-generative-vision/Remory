@@ -73,9 +73,8 @@ online250，不下载可变的 `main`，不绕过身份校验。
 `target_model` 路径。目标模型仍需验证为上述 revision 的未修改官方权重；协议中的
 metadata identity 不是对全部模型权重的远程密码学证明。
 
-优先检查 `/inspire/l20d/project/sais-bio/public/pretrained_models` 和目标机器已有缓存。
-确需下载时使用现有 `/inspire/l20d/project/sais-bio/public/hanchen/.codex-persist/bin/download-direct`；
-H20 没有此路径时可把随包的同策略 wrapper 安装到用户工具目录，并以它执行：
+优先复用已验证、revision 一致的官方模型缓存。确需下载时，使用随包的
+`handoff/h20/download-direct`，通过 `hf-mirror.com` 直连并绕过代理：
 
 ```bash
 sh handoff/h20/download-direct /srv/remory-stack/server/bin/hf download \
@@ -221,64 +220,28 @@ H20 主动连出的加密隧道。不能把 API key 发到该 HTTP 网页代理�
 
 ## 加入本机统一池
 
-若远端的基础模型相同，但 REMORY contract identity 尚未与本地对齐，可显式用
-`--stateless-only` 加入普通推理池。网关仍校验目标模型 metadata 和 dtype/量化身份。
-默认不向该后端发送 memory、encode、会话状态或本地 encoder version 请求。
-远端未共享本地训练版本目录时，配置 `supports_local_encoder_versions: false`。
-
-普通研究 decode 也可能携带已经压缩的 REMORY 张量，所以仅加入普通无状态池
-不足以分担这类请求。完成目标 embedding 注入及真实压缩张量的 text/image SSE
-验证后，可在生成的后端配置中显式设置 `allow_tensor_recover: true`，并把实测远端
-原始 `remory_artifact_identity` 对象原样填入 `tensor_recover_artifact_identity`。
-保留 `stateless_only: true` 及本地 checkpoint 身份锚点；不能根据基础模型名称推断此 pin。
-`add_remote_backend.py` 仍只生成默认受限配置，这两个字段需要在验证后显式添加。
-
-该例外只允许 `/generate`、`cache_policy: bypass`、完整显式 tensor rows/positions、
-指定 custom logit processor 的单请求 recover；batch、encode、handle、session、
-未知 memory 字段和未通过身份/capability 检查的后端仍不可远程分配。只有该远端
-recover 分发副本会移除 `remory_encoder_version`，因为 recover 不选择编码器；
-原请求、本地 recover、encode 和本地在线训练版本注册表保持原有语义。
-张量由调用方提供，编码和有状态记忆仍留在本地，不宣称远端能够替代本地 compressor。
-
-[脱敏验收记录](tensor-recovery-verification.json) 记录了 RED embedding 注入对照，
-以及 64×5120 压缩张量的 text/image SSE 验证。这些是指定后端的定向兼容性观察，
-不是任意模型兼容证明或上线完成记录；候选网关验收和生产 rollout 需另外确认。
-已明确授权 HTTP 平台入口时可传 `--allow-http`；默认仍要求 HTTPS。
-
-将远端 key 保存为本机权限 600 的私密文件。然后在本机此仓库中生成新配置：
+当前推荐使用 **server-owned memory + pinned backend**，见
+[混合推理池与性能更新](inference-pool.md)。普通生成可以按容量分流；一旦会话
+拥有远端 memory，父会话、子会话、compact 和恢复均使用同一后端。
+正常请求只携带 handle/snapshot 引用，不传输 soft-token 张量值。
 
 ```bash
-/inspire/l20d/project/sais-bio/public/hanchen/rm-stack/controller/bin/python \
-  tools/add_remote_backend.py \
-  --config deployment-online250/gateway.json \
-  --base-url https://实际域名/backends/h20-tp4 \
-  --api-key-file /本机私密路径/h20.key --name h20 --max-inflight 2 \
-  --local-checkpoint deployment-online250/serving \
-  --output /本机部署路径/gateway-with-h20.json
+python tools/add_remote_backend.py \
+  --config gateway.example.json \
+  --base-url https://h20.example.org/backends/h20-tp4 \
+  --api-key-file /secure/h20.key \
+  --local-checkpoint /models/remory-online250 \
+  --max-inflight 2 --memory-pinned-only \
+  --output gateway.with-h20.json
 ```
 
-脚本不会修改原配置或重启服务。先以本包 gateway 在空闲 loopback 端口启动候选统一池，
-检查 `/queue/status` 中所有预期后端 healthy，然后经候选池的 `/backends/h20` 跑
-`check_remote_memory.py`（checkpoint 用本机 online250 的 serving 目录）。新会话可先连该候选端口。
-要让现有队列端口接管新配置，应等待其在途请求结束，再用本包 gateway 切换服务。
-不要仅把新配置交给旧 gateway 二进制；旧版不支持这些字段及两级转发语义。
+本地和远端应部署同一公开 checkpoint。旧 `.pt` 与公开 safetensors 的文件哈希不同，
+只有文档中明确验证过的固定 pair 可启用 `--verified-artifact-pair`；不得将任意
+checkpoint 声称为等价。网关由操作方在排空后重启，工具只创建新配置。
 
-```bash
-REMORY_RUNTIME_FILE="$PWD/deployment-online250/runtime.json" \
-  REMORY_SGLANG_URL=http://127.0.0.1:候选池端口/groups/my-project r-codex
-```
-
-用户和 r-codex 继续只连接本机池，远端 key 由本机网关读取。
-如需单独诊断直连远端，客户端支持 `REMORY_SGLANG_API_KEY_FILE` 或
-`REMORY_SGLANG_API_KEY`；仅向 `REMORY_SGLANG_URL` 的同源地址发送凭据。
-模型/压缩器跨主机可以放在不同路径，通过 portable identity 匹配；本机 tokenizer
-读取自己的缓存。普通请求不会来回搬运 Remory 张量，兼容旧会话时的一次性导入除外。
-
-升级后新 r-codex 会话可以由仓库根目录的私密 `deployment.json` 选择本机池和 runtime。
-旧会话恢复时继续读取自己的版本配置，不会因默认版本变化而静默切换模型。
-不能把旧会话的 tensor/handle/快照当成新权重生成的 memory。
-
-H20 部署和公网接入以实际返回的验收记录为准；本地验证不表示已经修改远端服务。
+11 月 6 日的 `stateless_only + allow_tensor_recover` 是旧式 CPU 张量传输路径，
+[当时的验证记录](tensor-recovery-verification.json) 保留供追溯。
+它不代表“只发送引用”，新的引用式配置保持 `allow_tensor_recover: false`。
 
 ## 推理性能开关
 
