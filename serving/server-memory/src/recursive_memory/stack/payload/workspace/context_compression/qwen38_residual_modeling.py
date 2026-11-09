@@ -38,6 +38,14 @@ class SummaryCrossAttention(nn.Module):
     def forward(self, slots, summary, mask, *, stream_summary=False, chunk_tokens=1024):
         b, n, _ = slots.shape
         s = summary.shape[1]
+        summary_batch = b
+        if (not self.training and not torch.is_grad_enabled()
+                and b > 1 and summary.stride(0) == 0):
+            # Serving expands one fixed summary across independent nodes.
+            # Project its K/V once per layer (and per streaming tile), then
+            # broadcast; distinct summaries and all training retain their path.
+            summary = summary[:1]
+            summary_batch = 1
         q = self.q_proj(self.query_norm(slots)).view(b, n, self.heads, self.head_dim)
         if stream_summary:
             if self.training or torch.is_grad_enabled():
@@ -53,8 +61,8 @@ class SummaryCrossAttention(nn.Module):
             for start in range(0, s, chunk_tokens):
                 stop = min(s, start + chunk_tokens)
                 part = self.summary_norm(summary[:, start:stop].detach().to(slots))
-                k = self.k_proj(part).view(b, stop - start, self.kv_heads, self.head_dim)
-                v = self.v_proj(part).view(b, stop - start, self.kv_heads, self.head_dim)
+                k = self.k_proj(part).view(summary_batch, stop - start, self.kv_heads, self.head_dim)
+                v = self.v_proj(part).view(summary_batch, stop - start, self.kv_heads, self.head_dim)
                 k = self.k_norm(k).transpose(1, 2).repeat_interleave(self.heads // self.kv_heads, 1)
                 v = v.transpose(1, 2).repeat_interleave(self.heads // self.kv_heads, 1)
                 scores = torch.matmul(q.float(), k.float().transpose(-1, -2)) / math.sqrt(self.head_dim)
@@ -70,11 +78,13 @@ class SummaryCrossAttention(nn.Module):
             value = value.transpose(1, 2).reshape(b, n, -1)
             return slots + self.gate.tanh() * self.o_proj(value)
         summary = self.summary_norm(summary.detach())
-        k = self.k_proj(summary).view(b, s, self.kv_heads, self.head_dim)
-        v = self.v_proj(summary).view(b, s, self.kv_heads, self.head_dim)
+        k = self.k_proj(summary).view(summary_batch, s, self.kv_heads, self.head_dim)
+        v = self.v_proj(summary).view(summary_batch, s, self.kv_heads, self.head_dim)
         q = self.q_norm(q).transpose(1, 2)
         k = self.k_norm(k).transpose(1, 2).repeat_interleave(self.heads // self.kv_heads, 1)
         v = v.transpose(1, 2).repeat_interleave(self.heads // self.kv_heads, 1)
+        if summary_batch != b:
+            k, v = k.expand(b, -1, -1, -1), v.expand(b, -1, -1, -1)
         value = F.scaled_dot_product_attention(q, k, v, attn_mask=mask[:, None, None, :],
                                               dropout_p=0.0, is_causal=False)
         value = value.transpose(1, 2).reshape(b, n, -1)

@@ -740,3 +740,142 @@ def test_verified_remote_recover_strips_encoder_version_only_on_remote_dispatch(
                     assert response.status == 400
                 assert len(remote.calls) == 1 and len(local.calls) == 1
     asyncio.run(check())
+
+
+def test_completed_abort_is_idempotent_but_unknown_and_cross_group_are_not(tmp_path):
+    async def check():
+        backend = FakeServer()
+        async with listen(backend.app()) as url:
+            app = create_app(config(tmp_path, [url], request_timeout=None, queue_timeout=None))
+            async with listen(app) as proxy, aiohttp.ClientSession() as client:
+                r = await client.post(proxy + '/groups/research/generate', json={'text':'ok','rid':'finished'})
+                assert r.status == 200
+                await r.read()
+                await until(lambda: not app[APP_KEY].native_requests)
+                r = await client.post(proxy + '/groups/research/abort_request', json={'rid':'finished'})
+                assert r.status == 200 and (await r.json())['already_finished']
+                for group, rid in [('other','finished'), ('research','unknown')]:
+                    r = await client.post(proxy + f'/groups/{group}/abort_request', json={'rid':rid})
+                    assert r.status == 404
+    asyncio.run(check())
+
+
+def test_group_route_policy_applies_to_metadata_admission_and_pins(tmp_path):
+    async def check():
+        first, second = FakeServer(), FakeServer()
+        async with listen(first.app()) as a, listen(second.app()) as b:
+            settings = config(tmp_path, [a,b])
+            settings['backends'][1]['excluded_groups'] = ['research']
+            app = create_app(settings)
+            async with listen(app) as proxy, aiohttp.ClientSession() as client:
+                r = await client.get(proxy + '/groups/research/get_server_info')
+                assert (await r.json())['shared_gateway']['backends'] == ['gpu0']
+                r = await client.post(proxy + '/groups/research/generate', json={'text':'ok'})
+                assert r.status == 200 and r.headers['X-SGLang-Backend'] == 'gpu0'
+                r = await client.post(proxy + '/groups/research/backends/gpu1/generate', json={'text':'no'})
+                assert r.status == 404
+                r = await client.post(proxy + '/groups/other/backends/gpu1/generate', json={'text':'ok'})
+                assert r.status == 200
+    asyncio.run(check())
+
+
+def test_native_request_bytes_are_preserved_without_reencoding(tmp_path):
+    async def check():
+        backend=FakeServer()
+        seen=[]
+        async def capture(request):
+            seen.append(await request.read())
+            return web.json_response({'ok':True})
+        app=backend.app()
+        app.router.add_post('/encode',capture)
+        async with listen(app) as url:
+            proxy_app=create_app(config(tmp_path,[url]))
+            async with listen(proxy_app) as proxy,aiohttp.ClientSession() as client:
+                body=b'{ "input_ids" : [1, 2], "sampling_params" : {"max_new_tokens":0} }'
+                response=await client.post(proxy+'/encode',data=body,headers={'Content-Type':'application/json'})
+                assert response.status==200
+                assert seen==[body]
+    asyncio.run(check())
+
+
+def test_slow_request_inspection_does_not_block_health_or_cancellation(tmp_path,monkeypatch):
+    import threading
+    from recursive_memory.stack import gateway
+    inspect=gateway.inspect_request
+    began,release=threading.Event(),threading.Event()
+    def slow(raw,path,eligible):
+        began.set()
+        assert release.wait(5)
+        return inspect(raw,path,eligible)
+    monkeypatch.setattr(gateway,'inspect_request',slow)
+    async def check():
+        backend=FakeServer()
+        async with listen(backend.app()) as url:
+            app=create_app(config(tmp_path,[url]))
+            async with listen(app) as proxy,aiohttp.ClientSession() as client:
+                request=asyncio.create_task(client.post(proxy+'/generate',json={'text':'large body'}))
+                try:
+                    await until(began.is_set)
+                    async with asyncio.timeout(.5):
+                        response=await client.get(proxy+'/health')
+                        assert response.status==200
+                finally:
+                    release.set()
+                response=await request
+                assert response.status==200
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize('recover', [False, True])
+def test_large_research_requests_stay_local_small_requests_use_remote(tmp_path, recover):
+    async def check():
+        local, remote = PortableServer(), PortableServer(compressor='d', contract='e')
+        async with listen(local.app()) as a, listen(remote.app()) as b:
+            app = stateless_app(tmp_path, local, [a, b])
+            enable_tensor_recover(app, remote)
+            app[APP_KEY].backends[1].max_request_body_bytes = 1024
+            async with listen(app) as proxy, aiohttp.ClientSession() as client:
+                await until(lambda: app[APP_KEY].backends[1].healthy)
+                large = tensor_recover_payload() if recover else {'text': 'plain'}
+                large['input_ids'] = [1] * 1200
+                response = await client.post(proxy + '/groups/research/generate', json=large)
+                assert response.status == 200 and response.headers['X-SGLang-Backend'] == 'gpu0'
+                assert not remote.calls
+                small = tensor_recover_payload() if recover else {'text': 'plain'}
+                response = await client.post(proxy + '/groups/research/generate', json=small)
+                assert response.status == 200 and response.headers['X-SGLang-Backend'] == 'gpu1'
+                status = await (await client.get(proxy + '/queue/status')).json()
+                row = status['backends'][1]
+                assert row['routed_requests'] == row['successful_requests'] == 1
+                assert row['failed_requests'] == 0 and row['last_request_group'] == 'research'
+                assert row['last_request_kind'] == ('tensor_recover' if recover else 'generation')
+    asyncio.run(check())
+
+
+def test_rewritten_body_is_rerouted_before_any_remote_dispatch(tmp_path):
+    async def check():
+        local, remote = PortableServer(), PortableServer(compressor='d', contract='e')
+        async with listen(local.app()) as a, listen(remote.app()) as b:
+            app = stateless_app(tmp_path, local, [a, b])
+            app[APP_KEY].backends[1].max_request_body_bytes = 150
+            async with listen(app) as proxy, aiohttp.ClientSession() as client:
+                await until(lambda: app[APP_KEY].backends[1].healthy)
+                # The compact UTF-8 request fits; model alias rewriting expands
+                # its Unicode strings. Prefer remote so the late check is tested.
+                app[APP_KEY].backends[0].starts = 10
+                data = {'model': 'public', 'messages': [{'role': 'user', 'content': '文' * 20}]}
+                raw = json.dumps(data, ensure_ascii=False, separators=(',', ':')).encode()
+                assert len(raw) < 150 < len(json.dumps(data).encode())
+                response = await client.post(proxy + '/v1/chat/completions', data=raw,
+                                             headers={'Content-Type': 'application/json'})
+                assert response.status == 200 and response.headers['X-SGLang-Backend'] == 'gpu0'
+                assert not remote.calls and len(local.calls) == 1
+                assert local.calls[0][1]['messages'] == data['messages']
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize('limit', [True, 0, -1, 1.5, '1024'])
+def test_backend_body_limit_validation(tmp_path, limit):
+    with pytest.raises(ValueError, match='max_request_body_bytes'):
+        config(tmp_path, [], backends=[dict(name='remote', url='http://localhost:1',
+            model='public', max_inflight=1, max_request_body_bytes=limit)])

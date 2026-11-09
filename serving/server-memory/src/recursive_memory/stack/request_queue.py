@@ -27,8 +27,16 @@ class Backend:
     # Remote replicas may share base weights without sharing this registry.
     supports_local_encoder_versions: bool = True
     stateless_only: bool = False
+    memory_pinned_only: bool = False
     allow_tensor_recover: bool = False
     tensor_recover_artifact_identity: dict[str, Any] | None = None
+    excluded_groups: frozenset[str] = field(default_factory=frozenset)
+    max_request_body_bytes: int | None = None
+    routed_requests: int = 0
+    successful_requests: int = 0
+    failed_requests: int = 0
+    last_request_group: str | None = None
+    last_request_kind: str | None = None
 
     @property
     def can_route_tensor_recover(self):
@@ -62,6 +70,7 @@ class Ticket:
     requires_local_encoder_versions: bool = False
     requires_full_backend: bool = False
     tensor_recover: bool = False
+    body_bytes: int = 0
 
 
 class QueueFull(Exception):
@@ -81,27 +90,34 @@ class AdmissionQueue:
         return sum(len(group) for group in self.groups.values())
 
     def submit(self, *, group, model, pinned=None, units=1, requires_local_encoder_versions=False,
-               requires_full_backend=False, tensor_recover=False):
+               requires_full_backend=False, tensor_recover=False, body_bytes=0):
         if type(units) is not int or units < 1:
             raise ValueError("request units must be a positive integer")
+        if type(body_bytes) is not int or body_bytes < 0:
+            raise ValueError("request body_bytes must be a nonnegative integer")
         if self.closed:
             raise RuntimeError("gateway is draining")
-        candidates = [b for b in self.backends if b.model == model and
+        candidates = [b for b in self.backends if b.model == model and group not in b.excluded_groups and
                       (pinned is None or b.name == pinned) and
-                      (not requires_full_backend or not b.stateless_only
+                      (not requires_full_backend or (not b.stateless_only and (pinned is not None or not b.memory_pinned_only))
                        or tensor_recover and b.can_route_tensor_recover) and
                       (not requires_local_encoder_versions or b.can_route_local_encoder_versions)]
         if requires_local_encoder_versions and not candidates:
             raise ValueError("no matching backend supports the local remory_encoder_version registry")
         if requires_full_backend and not candidates:
             raise ValueError("memory/state requests cannot use a stateless_only backend")
+        candidates = [b for b in candidates if b.max_request_body_bytes is None
+                      or body_bytes <= b.max_request_body_bytes]
+        if not candidates:
+            raise ValueError("request body exceeds every compatible backend's max_request_body_bytes")
         if not candidates or not any(units <= b.capacity for b in candidates):
             raise ValueError("no matching backend has capacity for this request batch")
         if self.pending >= self.max_pending:
             raise QueueFull("request queue is full")
         ticket = Ticket(group, model, pinned, units, asyncio.get_running_loop().create_future(),
                         requires_local_encoder_versions=requires_local_encoder_versions,
-                        requires_full_backend=requires_full_backend, tensor_recover=tensor_recover)
+                        requires_full_backend=requires_full_backend, tensor_recover=tensor_recover,
+                        body_bytes=body_bytes)
         self.groups.setdefault(group, deque()).append(ticket)
         self.pump()
         return ticket
@@ -115,12 +131,15 @@ class AdmissionQueue:
                 group = self.groups[name]
                 ticket = group[0]
                 available = [b for b in self.backends if b.healthy
+                             and ticket.group not in b.excluded_groups
                              and b.model == ticket.model
                              and (ticket.pinned is None or b.name == ticket.pinned)
-                             and (not ticket.requires_full_backend or not b.stateless_only
+                             and (not ticket.requires_full_backend or (not b.stateless_only and (ticket.pinned is not None or not b.memory_pinned_only))
                                   or ticket.tensor_recover and b.can_route_tensor_recover)
                              and (not ticket.requires_local_encoder_versions
                                   or b.can_route_local_encoder_versions)
+                             and (b.max_request_body_bytes is None
+                                  or ticket.body_bytes <= b.max_request_body_bytes)
                              and b.load + ticket.units <= b.capacity]
                 if not available:
                     continue

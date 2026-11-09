@@ -22,6 +22,70 @@ TOOLS = [{'type': 'namespace', 'name': 'multi_agent_v1', 'tools': [
 HEADERS = {'thread-id': 'root'}
 
 
+def test_thread_failure_does_not_match_quoted_history(tmp_path):
+    from remory.codex.native_folding import director_thread_failure
+    panic = "thread 'tokio-rt-worker' (123) panicked at thread.rs:131:29:\n" \
+            'failed to spawn thread: Os { code: 11, kind: WouldBlock }'
+    path = tmp_path / 'director.log'
+    path.write_text(json.dumps({'type': 'item.completed', 'text': panic}) + '\n')
+    assert director_thread_failure(path) is None
+    with path.open('a') as log:
+        log.write(panic + '\n')
+    assert director_thread_failure(path) == panic
+
+
+def test_live_panicked_director_is_detected_and_reaped(tmp_path, monkeypatch):
+    """A native worker can panic without exiting its owning process."""
+    import os
+    import subprocess
+    import sys
+    from copy import deepcopy
+    from remory.codex import native_folding
+    binary = tmp_path / 'fake-native'
+    env_path = tmp_path / 'thread-env.json'
+    binary.write_text(f'#!{sys.executable}\n' +
+        'import json, os, sys, time\n' +
+        f'open({str(env_path)!r}, "w").write(json.dumps({{k: os.environ[k] for k in '
+        '["TOKIO_WORKER_THREADS", "RAYON_NUM_THREADS"]}))\n' +
+        'print("thread \'tokio-rt-worker\' (123) panicked at thread.rs:131:29:", file=sys.stderr)\n' +
+        'print("failed to spawn thread: Os { code: 11, kind: WouldBlock }", file=sys.stderr, flush=True)\n' +
+        'time.sleep(60)\n')
+    binary.chmod(0o700)
+    processes, alive_when_detected = [], []
+    popen, check = subprocess.Popen, native_folding.director_thread_failure
+    def record_process(*args, **kwargs):
+        process = popen(*args, **kwargs)
+        processes.append(process)
+        return process
+    def record_failure(path):
+        failure = check(path)
+        if failure:
+            alive_when_detected.append(processes[-1].poll() is None)
+        return failure
+    monkeypatch.setattr(native_folding.subprocess, 'Popen', record_process)
+    monkeypatch.setattr(native_folding, 'director_thread_failure', record_failure)
+    provider = SimpleNamespace(config={}, max_new_tokens=128,
+                               tokenizer=SimpleNamespace(encode=lambda *a, **k: []))
+    # Explicit overrides remain respected; the other pool gets a bounded default.
+    folder = native_folding.NativeFolder(binary, {}, {'RAYON_NUM_THREADS': '2'}, provider)
+    snapshot = {'messages': [{'role': 'user', 'content': 'Preserve this evidence.'}],
+                'prefix': [], 'previous_summary': None, 'branch_summaries': []}
+    before = deepcopy(snapshot)
+    timer = threading.Timer(40, folder.close)
+    timer.start()
+    try:
+        with pytest.raises(RuntimeError, match='thread creation failed.*original snapshot retained'):
+            with folder.fold(snapshot):
+                pytest.fail('Failed organizer must never yield a committed transform')
+    finally:
+        timer.cancel()
+        folder.close()
+    assert alive_when_detected == [True]
+    assert processes and all(p.poll() is not None for p in processes)
+    assert snapshot == before and folder._active == {}
+    assert json.loads(env_path.read_text()) == {'TOKIO_WORKER_THREADS': '4', 'RAYON_NUM_THREADS': '2'}
+
+
 def test_director_emits_real_native_calls_and_holds_close_until_commit_context_exit():
     state = SimpleNamespace(result=None)
     d = Director(None, state)

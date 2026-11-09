@@ -155,3 +155,42 @@ def test_queued_tensor_recover_rechecks_opt_in_identity_and_capabilities():
         assert await ticket.future is remote
         queue.release(ticket)
     asyncio.run(check())
+
+
+def test_group_exclusion_is_kept_while_waiting():
+    async def check():
+        local = Backend('local','http://local','model',1,healthy=True,observed_load=1)
+        remote = Backend('remote','http://remote','model',1,healthy=True,excluded_groups=frozenset({'research'}))
+        q = AdmissionQueue([local,remote])
+        ticket = q.submit(group='research',model='model')
+        assert ticket.backend is None
+        q.pump()
+        assert ticket.backend is None
+        local.observed_load = 0
+        q.pump()
+        assert await ticket.future is local
+        q.release(ticket)
+    asyncio.run(check())
+
+
+def test_body_limit_is_checked_on_submission_and_after_waiting():
+    async def check():
+        local = Backend('local', 'http://local', 'model', 1, healthy=True, observed_load=1)
+        remote = Backend('remote', 'http://remote', 'model', 1, healthy=True,
+                         max_request_body_bytes=100)
+        q = AdmissionQueue([local, remote])
+        large = q.submit(group='research', model='model', body_bytes=101)
+        assert large.backend is None
+        with pytest.raises(ValueError, match='max_request_body_bytes'):
+            q.submit(group='research', model='model', pinned='remote', body_bytes=101)
+        small = q.submit(group='other', model='model', body_bytes=100)
+        assert small.backend is remote
+        q.release(small)
+        available(remote, q)
+        assert large.backend is None
+        local.observed_load = 0
+        q.pump()
+        assert await large.future is local
+        q.release(large)
+        assert not q.pending and local.active == remote.active == 0
+    asyncio.run(check())

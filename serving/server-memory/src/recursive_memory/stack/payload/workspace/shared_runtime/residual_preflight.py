@@ -54,7 +54,7 @@ def assert_residual_concurrency(info, count):
 def load_checkpoint_contract(checkpoint: Path) -> dict:
     specforge = Path(os.environ.get("SPECFORGE_ROOT", os.environ.get(
         "TERMINAL_BENCH_POOL_SPECFORGE_ROOT",
-        "/inspire/ssd/project/sais-bio/public/chenbaoyou/workspace/SpecForge",
+        str(Path(__file__).resolve().parents[1]),
     )))
     if str(specforge) not in sys.path:
         sys.path.insert(0, str(specforge))

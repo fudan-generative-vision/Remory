@@ -1,0 +1,27 @@
+{
+  "compared_at": "2026-11-09T17:25:44.768930+00:00",
+  "script_sha256": "287b8c329c0b3e38065172f9f3a0a46590ce5e58e84d4f3309a5cb8586b25fc2",
+  "method": "Provided unmodified script, CPU only, CUDA_VISIBLE_DEVICES empty, four CPU threads per invocation",
+  "remote_file_sha256": "59d36bcec81c44bb314b63afea4dae79d8cda53a8918a5364143d8ecb2a499e5",
+  "comparisons": {
+    "current_safetensors": {
+      "tensor_count": 117,
+      "file_sha256": "59d36bcec81c44bb314b63afea4dae79d8cda53a8918a5364143d8ecb2a499e5",
+      "same_file_bytes_as_remote": true,
+      "all_tensor_metadata_and_value_hashes_equal": true,
+      "differences": [],
+      "all_floating_tensors_finite": true,
+      "tensor_values_exported": false
+    },
+    "original_pt": {
+      "tensor_count": 117,
+      "file_sha256": "cf1fe99c2f51f330b4b93055b0da4f930e1b01d1841d0b9b9825a8e4dc386732",
+      "same_file_bytes_as_remote": false,
+      "all_tensor_metadata_and_value_hashes_equal": true,
+      "differences": [],
+      "all_floating_tensors_finite": true,
+      "tensor_values_exported": false
+    }
+  },
+  "scope_limit": "Equality of serialized weights/tensor hashes does not attest an active worker, runtime dtype, protocol, or remote GPU output."
+}

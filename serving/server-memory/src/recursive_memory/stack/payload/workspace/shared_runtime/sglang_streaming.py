@@ -145,6 +145,7 @@ class GenerationStreamingMixin:
 
         def read(url, seconds):
             # This endpoint is implemented even when Prometheus is disabled.
+            # Share the client's origin-scoped authentication and no-redirect policy.
             with self._open_request(urllib.request.Request(url), timeout=seconds) as response:
                 payload = response.read(65537)
             if len(payload) > 65536:
@@ -308,6 +309,11 @@ class GenerationStreamingMixin:
                     raise StreamProtocolError(f"SGLang /generate returned HTTP {exc.code}: {detail}") from exc
                 except (StreamInterrupted, urllib.error.URLError, OSError, http.client.HTTPException) as exc:
                     self._check_stream_open()  # Ctrl+C/timeout shutdown never continues the agent.
+                    if getattr(self, "server_memory", False):
+                        # The enclosing cancellable request aborts this rid. Do
+                        # not return partial tokens that trigger automatic resume
+                        # against a possibly invalid epoch or uncertain lease.
+                        raise RuntimeError("Stateful SGLang stream interrupted; explicit recovery required") from exc
                     if not tokens:
                         raise RuntimeError("SGLang stream interrupted before any output tokens") from exc
                     # Abort ONLY this rid. An acknowledged abort is a request to

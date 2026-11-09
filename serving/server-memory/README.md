@@ -1,3 +1,19 @@
+# REMORY serving runtime
+
+This directory contains the advanced SGLang runtime and request gateway used by
+REMORY's local and remote inference pool.
+
+- [Mixed pool, encoder optimizations and measurements](docs/inference-pool.md)
+- [Server-owned memory and durable checkpoints](docs/server-memory.md)
+- [H20 installation and deployment](docs/h20-public-deployment.md)
+
+For the standard installation and Codex quick start, use the
+[root README](../../README.md). The command-line recipes below describe the
+historical evaluation stack; machine-specific research sessions are not included.
+
+<details>
+<summary>Historical evaluation runtime reference</summary>
+
 # Recursive Memory
 
 SGLang + residual Compressor + **Codex native compact / xhigh**, with two supported uses:
@@ -226,3 +242,5 @@ isolated serving/controller/document environments. CPU tests do not substitute
 for a clean GPU installation or a complete benchmark run.
 
 The TB2.1 node launcher also supports a paired [native compact without residual memory](docs/native-compact-ablation.md) control with `--memory none`.
+
+</details>

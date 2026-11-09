@@ -90,6 +90,14 @@ def _slice_customized_info_for_output(
     output_length: int,
     is_finished: bool = True,
 ) -> Any:
+    if key == "remory_encoding":
+        # Encoding is prefill-only (zero generated tokens). Its timing receipt
+        # belongs to the request, so token slicing would silently erase it.
+        if not is_finished:
+            return None
+        if len(values) != 1 or not isinstance(values[0], dict):
+            raise RuntimeError("Remory encoding receipt must contain exactly one object")
+        return dict(values[0])
     if key == GPU_MEMORY_HANDLE_META_KEY:
         if not is_finished:
             return None

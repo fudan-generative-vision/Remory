@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import math
 import os
+import time
+import logging
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -28,6 +30,106 @@ RESIDUAL_HOOK_FACTORY = (
     "context_compression.qwen38_residual_sglang_hook:make_summary_residual_compressor_hook"
 )
 RESIDUAL_CONTEXT_ORGANIZATION = "qwen38_summary_residual_v1"
+
+logger = logging.getLogger(__name__)
+
+
+def _residual_microbatch_limit(compressor, aux, summary, block, ratio):
+    """Bound transient encoder workspace; never stage the complete history."""
+    limit = int(os.environ.get("REMORY_ENCODE_BATCH_BLOCKS", "4"))
+    budget_mib = int(os.environ.get("REMORY_ENCODE_BATCH_MIB", "1024"))
+    if limit < 1 or budget_mib < 1:
+        raise ValueError("REMORY encode batch blocks and MiB must be positive")
+    weight = next(compressor.parameters())
+    if weight.device.type != "cuda" or limit == 1:
+        return limit
+    free, _ = torch.cuda.mem_get_info(weight.device)
+    # Leave headroom for the serving runtime. This is a conservative planning
+    # estimate, not an allocator guarantee; the encoder also retries CUDA OOM.
+    budget = min(budget_mib << 20, max(0, free - (1 << 30)) // 2)
+    width = sum(h.shape[-1] for h in aux)
+    hidden = summary.shape[-1]
+    config = getattr(compressor, "config", None)
+    heads = getattr(config, "num_attention_heads", 32)
+    intermediate = getattr(config, "intermediate_size", 4 * hidden)
+    slots = block // ratio
+    rows = summary.shape[1]
+    if summary.device.type == "cpu" and rows > 4096:
+        rows = 1024  # exact streamed summary attention, not a truncation
+    elements = block * (width + 4 * hidden) + slots * (12 * hidden + 4 * intermediate)
+    # Expanded summary views share one K/V projection across the microbatch.
+    summary_workspace = int(1.25 * 6 * rows * hidden * weight.element_size())
+    scores = 3 * heads * slots * (block + slots + rows) * 4
+    per_block = max(1, int(1.25 * (elements * weight.element_size() + scores)))
+    return max(1, min(limit, max(0, budget - summary_workspace) // per_block))
+
+
+def encode_residual_blocks(compressor, aux, *, start, end, block, ratio,
+                           summary, summary_mask, input_depths, max_batch_blocks=None):
+    """Batch independent nodes along B, retaining per-node RoPE/masks/order.
+
+    Depth is a scalar compressor input, so only adjacent equal-depth nodes
+    share a call. Parent/child scheduling and causal feature extraction remain
+    outside this function. No checkpoint state or persistent memory is changed.
+    """
+    count = (end - start + block - 1) // block
+    if count < 1 or len(input_depths) != count:
+        raise ValueError("residual block depths must match the nonempty source")
+    limit = (_residual_microbatch_limit(compressor, aux, summary, block, ratio)
+             if max_batch_blocks is None else max_batch_blocks)
+    if type(limit) is not int or limit < 1:
+        raise ValueError("max_batch_blocks must be a positive integer")
+    weight = next(compressor.parameters())
+
+    def encode_batch(first, size):
+        left = start + first * block
+        right = min(end, left + size * block)
+        # One bounded host-to-device transfer per microbatch. Pad only source
+        # rows; even a short final node still has the original fixed slot count.
+        features = torch.cat([h[left:right] for h in aux], dim=-1)
+        source_width = min(block, right - left)
+        if features.shape[0] != size * source_width:
+            features = torch.nn.functional.pad(features, (0, 0, 0, size * source_width - features.shape[0]))
+        features = features.reshape(size, source_width, -1).to(device=weight.device)
+        lengths = torch.tensor([min(block, end - (left + i * block)) for i in range(size)],
+                               device=weight.device)
+        mask = torch.arange(source_width, device=weight.device)[None] < lengths[:, None]
+        encoded = compressor(features, mask, source_token_lengths=lengths,
+            slot_token_lengths=torch.full_like(lengths, block),
+            summary_features=summary.expand(size, -1, -1),
+            summary_attention_mask=summary_mask.expand(size, -1),
+            input_depth=input_depths[first])
+        slots = block // ratio
+        if (encoded.embeddings.shape != (size, slots, summary.shape[-1])
+                or encoded.attention_mask.shape != (size, slots)
+                or not bool(encoded.attention_mask.all())):
+            raise SpecForgeCompressorContractError("residual node violated fixed 1024-to-64 geometry")
+        return encoded.embeddings.reshape(size * slots, summary.shape[-1])
+
+    pieces = []
+    first = 0
+    with torch.inference_mode():
+        while first < count:
+            size = 1
+            while (size < limit and first + size < count
+                   and input_depths[first + size] == input_depths[first]):
+                size += 1
+            try:
+                memory = encode_batch(first, size)
+            except torch.cuda.OutOfMemoryError:
+                if size == 1:
+                    raise
+                limit = max(1, size // 2)
+                logger.warning("REMORY encode CUDA OOM: retrying %s blocks with batch limit %s", size, limit)
+            else:
+                pieces.append(memory)
+                first += size
+                continue
+            # Leave the exception scope first so its traceback releases failed
+            # batch tensors. Successful blocks are retained and never recomputed.
+            if weight.device.type == "cuda":
+                torch.cuda.empty_cache()
+    return torch.cat(pieces)
 
 
 def _load_summary_residual_compressor(metadata, device, dtype):
@@ -245,6 +347,8 @@ class SummaryResidualSGLangHook(SpecForgeContextCompressorHook):
         except (ValueError, TypeError) as exc:
             raise SpecForgeCompressorContractError(str(exc)) from exc
         start, end = payload["evidence_spans"][0]
+        encode_started = time.perf_counter()
+        strategy = "summary"
         if residual["operation"] == "summary":
             # The logits processor receives post-final-RMSNorm target states.
             hidden = inputs[1]
@@ -267,33 +371,36 @@ class SummaryResidualSGLangHook(SpecForgeContextCompressorHook):
                                           device=summary_device)[None]
             summary_mask = torch.ones(summary.shape[:2], dtype=torch.bool, device=summary.device)
             block = self.residual_contract.block_tokens
-            pieces = []
-            with torch.inference_mode():
-                for block_index, left in enumerate(range(start, end, block)):
-                    right = min(end, left + block)
-                    # Captured layers may live on CPU to bound the target's
-                    # full-history prefill peak. Stage only this exact block;
-                    # never copy all captured layers back to CUDA at once.
-                    features = torch.cat([h[left:right] for h in aux], dim=-1).to(
-                        device=compressor_device
-                    )[None]
-                    mask = torch.ones(features.shape[:2], dtype=torch.bool, device=features.device)
-                    lengths = torch.tensor([right - left], device=features.device)
-                    fixed_slots = torch.tensor([block], device=features.device)
-                    encoded = self.compressor(
-                        features, mask, source_token_lengths=lengths, slot_token_lengths=fixed_slots,
-                        summary_features=summary, summary_attention_mask=summary_mask,
-                        input_depth=(residual["block_input_depths"][block_index]
-                                     if residual["operation"] == "recursive_leaves"
-                                     else residual["input_depth"]),
-                    )
-                    memory = encoded.embeddings[encoded.attention_mask]
-                    if memory.shape != (block // self.metadata.compression_ratio, self.metadata.target_hidden_size):
-                        raise SpecForgeCompressorContractError("residual node violated fixed 1024-to-64 geometry")
-                    pieces.append(memory)
-            packed = torch.cat(pieces)
+            count = (end - start + block - 1) // block
+            depths = (residual["block_input_depths"] if residual["operation"] == "recursive_leaves"
+                      else [residual["input_depth"]] * count)
+            group = None
+            if torch.distributed.is_initialized():
+                from sglang.srt.distributed import get_tp_group
+                group = get_tp_group().device_group
+            use_tp = (os.environ.get("REMORY_PARALLEL_ENCODE", "1") == "1"
+                      and torch.distributed.is_initialized()
+                      and torch.distributed.get_world_size(group) > 1)
+            if use_tp:
+                # Keep each node's serial arithmetic; distribute nodes only
+                # within this actor's TP group and gather them in source order.
+                from context_compression.remory_parallel_encode import encode_blocks
+                packed = encode_blocks(self.compressor, aux, start=start, end=end,
+                    block_tokens=block, compression_ratio=self.metadata.compression_ratio,
+                    hidden_size=self.metadata.target_hidden_size, summary=summary,
+                    summary_mask=summary_mask, depths=depths, group=group)
+                strategy = "tp_nodes"
+            else:
+                packed = encode_residual_blocks(self.compressor, aux, start=start, end=end,
+                    block=block, ratio=self.metadata.compression_ratio, summary=summary,
+                    summary_mask=summary_mask, input_depths=depths)
+                strategy = "local_blocks"
         if not bool(torch.isfinite(packed).all()):
             raise SpecForgeCompressorContractError("residual encode produced nonfinite states")
+        output.customized_info = {**(getattr(output, "customized_info", None) or {}),
+            "remory_encoding": [dict(operation=residual["operation"], source_tokens=end-start,
+                blocks=(end-start+self.residual_contract.block_tokens-1)//self.residual_contract.block_tokens,
+                compressor_seconds=time.perf_counter()-encode_started, strategy=strategy)]}
         if "memory_handle_publish" in payload:
             from context_compression.remory_memory import transition_digest
             from sglang.srt.remory_memory import collective_publish

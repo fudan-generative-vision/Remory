@@ -73,12 +73,21 @@ def load_config(path):
             if field in backend and (not isinstance(backend[field], str) or not Path(backend[field]).is_absolute()):
                 raise ValueError(field + " must be an absolute path")
         positive(backend["max_inflight"], "max_inflight", integer=True)
+        if backend.get("max_request_body_bytes") is not None:
+            positive(backend["max_request_body_bytes"], "max_request_body_bytes", integer=True)
+        excluded = backend.get("excluded_groups", [])
+        if not isinstance(excluded, list) or any(not isinstance(g, str) or not NAME.fullmatch(g) for g in excluded):
+            raise ValueError("excluded_groups must be an array of valid queue group names")
         if not isinstance(backend.get("probe_load", True), bool):
             raise ValueError("probe_load must be boolean")
         if not isinstance(backend.get("supports_local_encoder_versions", True), bool):
             raise ValueError("supports_local_encoder_versions must be boolean")
         if not isinstance(backend.get("stateless_only", False), bool):
             raise ValueError("stateless_only must be boolean")
+        if not isinstance(backend.get("memory_pinned_only", False), bool):
+            raise ValueError("memory_pinned_only must be boolean")
+        if backend.get("verified_artifact_pair") and (not backend.get("memory_pinned_only") or not backend.get("local_checkpoint")):
+            raise ValueError("verified_artifact_pair requires memory_pinned_only and local_checkpoint")
         if backend.get("stateless_only") and not backend.get("local_checkpoint"):
             raise ValueError("stateless_only requires a local_checkpoint base identity anchor")
         if not isinstance(backend.get("allow_tensor_recover", False), bool):
@@ -99,7 +108,8 @@ def load_config(path):
     for name, default in (("max_pending", 256), ("max_body_bytes", 1024 * 1024 * 1024)):
         config[name] = positive(config.get(name, default), name, integer=True)
     for name, default in (("queue_timeout", 1800), ("request_timeout", 3600), ("probe_interval", 1)):
-        config[name] = positive(config.get(name, default), name)
+        value = config.get(name, default)
+        config[name] = None if value is None and name != "probe_interval" else positive(value, name)
     return config
 
 
@@ -237,13 +247,53 @@ def needs_pin(path, data):
             or data.get("store") is True or data.get("background") is True)
 
 
+def inspect_request(raw, path, eligible_recover):
+    data = json.loads(raw) if raw else {}
+    if not isinstance(data, dict):
+        raise ValueError("request body must be a JSON object")
+    return (data, needs_pin(path, data), request_units(path, data),
+            needs_local_encoder_versions(data), needs_full_backend(path, data),
+            is_tensor_recover(path, data) if eligible_recover else False)
+
+
+def outbound_request(data, raw, rewrite, path, backend, tensor_recover):
+    """Prepare exact wire bytes before checking the selected backend's limit."""
+    outbound = data
+    version_headers = {}
+    if backend.memory_pinned_only and path == "/generate":
+        def tensor_field(value):
+            if isinstance(value, dict):
+                return any(k in {"memory_embeddings", "summary_features", "input_embeds", "input_embeddings"}
+                           or tensor_field(v) for k, v in value.items())
+            return isinstance(value, list) and any(tensor_field(v) for v in value if isinstance(v, (dict, list)))
+        if tensor_field(data):
+            raise ValueError("pinned server memory requires references; use explicit legacy import once")
+    if path.startswith("/v1/") and "model" in data:
+        outbound = {**outbound, "model": backend.native_model}
+        rewrite = True
+    if backend.stateless_only and tensor_recover:
+        sampling = data["sampling_params"]
+        custom = sampling["custom_params"]
+        if "remory_encoder_version" in custom:
+            # Recovery scatters supplied tensors; it never consults an encoder.
+            # Keep this field on local routes and on every encoding request.
+            outbound = {**outbound, "sampling_params": {**sampling, "custom_params": {
+                k: v for k, v in custom.items() if k != "remory_encoder_version"}}}
+            version_headers["X-Remory-Encoder-Version-Handling"] = "ignored-for-tensor-recover"
+            rewrite = True
+    return (json.dumps(outbound).encode() if rewrite else raw), version_headers
+
+
 class Gateway:
     def __init__(self, config, *, api_key=None):
         self.config, self.api_key = config, api_key
         self.backends = [Backend(row["name"], row["url"], row["model"], row["max_inflight"],
                                  supports_local_encoder_versions=row.get("supports_local_encoder_versions", True),
                                  stateless_only=row.get("stateless_only", False),
+                                 memory_pinned_only=row.get("memory_pinned_only", False),
                                  allow_tensor_recover=row.get("allow_tensor_recover", False),
+                                 excluded_groups=frozenset(row.get("excluded_groups", [])),
+                                 max_request_body_bytes=row.get("max_request_body_bytes"),
                                  tensor_recover_artifact_identity=row.get("tensor_recover_artifact_identity"))
                          for row in config["backends"]]
         self.settings = {row["name"]: row for row in config["backends"]}
@@ -255,6 +305,10 @@ class Gateway:
         self.failed = 0
         self.uploading = 0
         self.native_requests = {}
+        # Bounded, group-scoped receipts make cancellation idempotent after a
+        # completed HTTP exchange or an acknowledged upstream abort. Unknown
+        # requests and failed cleanup must never masquerade as drained work.
+        self.finished_requests = {}
         self.local_contracts = {}
         # Optional, explicitly configured bridge for existing legacy engines
         # which expose paths instead of the new portable artifact identity.
@@ -268,7 +322,7 @@ class Gateway:
                 checkpoint = Path(row["local_checkpoint"]).resolve()
                 local = load_residual_serving_contract(checkpoint)
                 self.local_contracts[row["name"]] = dict(checkpoint=str(checkpoint),
-                    target=local["target_model"], identity=artifact_identity(checkpoint, local))
+                    target=local["target_model"], identity=artifact_identity(checkpoint, local), config=local)
 
     def headers(self, backend):
         filename = self.settings[backend.name].get("api_key_file")
@@ -325,7 +379,13 @@ class Gateway:
                 # backend.info retains the remote's real portable identity.
                 artifact = local["identity"]
             elif local is not None and artifact != local["identity"]:
-                raise ValueError("backend residual identity differs from its configured checkpoint")
+                from context_compression.h20_equivalence import POLICY, verified_pair
+                if (self.settings[backend.name].get("verified_artifact_pair") != POLICY
+                        or not backend.memory_pinned_only or not verified_pair(local["identity"], info, local["config"])):
+                    raise ValueError("backend residual identity differs from its configured checkpoint")
+                # Only the internal base/weights grouping uses the verified pair.
+                # Pinned endpoint metadata and snapshot identities stay raw.
+                artifact = local["identity"]
             return dict(artifact=artifact, dtype=info.get("dtype"), quantization=info.get("quantization"),
                         kv_cache_dtype=info.get("kv_cache_dtype"),
                         residual_serving_abi=(reference.info.get("forward_hooks", [{}])[0]
@@ -440,7 +500,13 @@ class Gateway:
                 "admitted": self.queue.admitted, "completed": self.completed, "failed": self.failed,
                 "backends": [{"name": b.name, "model": b.model, "healthy": b.healthy,
                               "active": b.active, "observed_load": b.observed_load,
-                              "admission_load": b.load, "capacity": b.capacity, "error": b.error}
+                              "admission_load": b.load, "capacity": b.capacity, "error": b.error,
+                              "max_request_body_bytes": b.max_request_body_bytes,
+                              "routed_requests": b.routed_requests,
+                              "successful_requests": b.successful_requests,
+                              "failed_requests": b.failed_requests,
+                              "last_request_group": b.last_request_group,
+                              "last_request_kind": b.last_request_kind}
                              for b in self.backends]}
 
     async def handle(self, request):
@@ -463,15 +529,15 @@ class Gateway:
             if len(parts) != 4 or (pinned and pinned != parts[2]):
                 return error(400, "invalid or conflicting backend selection")
             pinned, path = parts[2], "/" + parts[3]
-        if pinned and pinned not in self.settings:
-            return error(404, "unknown backend")
+        if pinned and (pinned not in self.settings or group in self.settings[pinned].get("excluded_groups", [])):
+            return error(404, "unknown or unavailable backend for this queue group")
         if path == "/health" and request.method == "GET":
-            ready = any(b.healthy and (not pinned or b.name == pinned) for b in self.backends)
+            ready = any(b.healthy and group not in b.excluded_groups and (not pinned or b.name == pinned) for b in self.backends)
             return web.json_response({"status": "ready" if ready else "unavailable"}, status=200 if ready else 503)
         if path == "/queue/status" and request.method == "GET":
             return web.json_response(self.status())
         if path == "/get_load" and request.method == "GET":
-            choices = [b for b in self.backends if b.healthy and (not pinned or b.name == pinned)]
+            choices = [b for b in self.backends if b.healthy and group not in b.excluded_groups and (not pinned or b.name == pinned)]
             if not choices or any(not b.load_info for b in choices):
                 return error(503, "backend token progress counters are unavailable")
             # Native streaming clients distinguish queued peer progress from
@@ -483,14 +549,14 @@ class Gateway:
         if path == "/v1/models" and request.method == "GET":
             return web.json_response({"object": "list", "data": [
                 {"id": model, "object": "model", "owned_by": "shared-sglang"}
-                for model in sorted({b.model for b in self.backends if not pinned or b.name == pinned})]})
+                for model in sorted({b.model for b in self.backends if group not in b.excluded_groups and (not pinned or b.name == pinned)})]})
         if path in INFO_PATHS and request.method == "GET":
-            choices = [b for b in self.backends if b.healthy and (not pinned or b.name == pinned)]
+            choices = [b for b in self.backends if b.healthy and group not in b.excluded_groups and (not pinned or b.name == pinned)]
             if not choices:
                 return error(503, "selected backend is unavailable")
             if not pinned and len({b.model for b in self.backends}) != 1:
                 return error(400, "multiple models: select X-SGLang-Backend or /backends/NAME prefix")
-            full_choices = [b for b in choices if not b.stateless_only]
+            full_choices = [b for b in choices if not b.stateless_only and (pinned or not b.memory_pinned_only)]
             metadata_backend = (full_choices or choices)[0]
             if path in {"/get_server_info", "/server_info"}:
                 info = dict(metadata_backend.info)
@@ -542,7 +608,7 @@ class Gateway:
                                               "stateless_only_backends": [b.name for b in choices if b.stateless_only],
                                               "tensor_recover_backends": [b.name for b in choices if b.can_route_tensor_recover],
                                               "memory_backends": [dict(name=b.name, load=b.load, capacity=b.capacity)
-                                                  for b in full_choices if "remory_server_memory_v1" in b.info.get("request_capabilities", [])]}
+                                                  for b in choices if not b.stateless_only and "remory_server_memory_v1" in b.info.get("request_capabilities", [])]}
                 return web.json_response(info)
             try:
                 return web.json_response(scrub_metadata(await self.read_json(metadata_backend, path)))
@@ -555,9 +621,15 @@ class Gateway:
                 if payload.get("abort_all") or not isinstance(rid, str):
                     return error(400, "only one gateway-owned native rid may be cancelled")
                 owner = self.native_requests.get(rid)
+                finished = self.finished_requests.get(rid)
+                if owner is None and finished and finished[0] == group and time.monotonic() - finished[1] < 600:
+                    return web.json_response({"aborted": True, "already_finished": True, "rid": rid})
                 if owner is None or owner["group"] != group:
                     return error(404, "no active request with that rid in this queue group")
                 owner["task"].cancel()
+                await asyncio.gather(owner["task"], return_exceptions=True)
+                if rid not in self.finished_requests:
+                    return error(503, "upstream cancellation could not be confirmed")
                 return web.json_response({"aborted": True, "rid": rid})
             except (ValueError, TypeError, AttributeError):
                 return error(400, "invalid cancellation request")
@@ -574,18 +646,28 @@ class Gateway:
         response = None
         native_ids = []
         owned_rid = None
+        drained = False
+        dispatched_backend = None
+        dispatch_success = False
         try:
             raw = await request.read()
-            data = json.loads(raw) if raw else {}
+            eligible_recover = any(b.allow_tensor_recover and group not in b.excluded_groups
+                                   and (not pinned or b.name == pinned) for b in self.backends)
+            # Large hidden-state JSON must not run its recursive Python walks
+            # on the control-plane event loop. Inspection never dispatches or
+            # mutates a request, so cancellation while inspecting is harmless.
+            data, pin_required, units, requires_local_encoder_versions, requires_full_backend, tensor_recover = await asyncio.to_thread(
+                inspect_request, raw, path, eligible_recover)
+            rewrite = not raw
             if not isinstance(data, dict):
                 raise ValueError("request body must be a JSON object")
             if data.get("background") is True:
                 raise ValueError("background inference is not supported; keep the request/stream open")
             if path == "/v1/responses" and data.get("store", True) and not pinned:
                 raise ValueError("stored Responses require a pinned backend; use store=false for stateless routing")
-            if needs_pin(path, data) and not pinned:
+            if pin_required and not pinned:
                 raise ValueError("server-side state requires X-SGLang-Backend or /backends/NAME prefix")
-            models = {b.model for b in self.backends if not pinned or b.name == pinned}
+            models = {b.model for b in self.backends if group not in b.excluded_groups and (not pinned or b.name == pinned)}
             model = data.get("model")
             if model is None and len(models) == 1:
                 model = next(iter(models))
@@ -593,10 +675,6 @@ class Gateway:
                 return error(404, "select a model advertised by /v1/models", "model_not_found")
             if not NAME.fullmatch(group):
                 raise ValueError("X-Queue-Group must be 1..128 letters, digits, _, ., : or -")
-            units = request_units(path, data)
-            requires_local_encoder_versions = needs_local_encoder_versions(data)
-            requires_full_backend = needs_full_backend(path, data)
-            tensor_recover = is_tensor_recover(path, data)
             if tensor_recover:
                 requires_local_encoder_versions = False
             if path == "/generate":
@@ -610,11 +688,15 @@ class Gateway:
                         raise ValueError("invalid native rid")
                     if rid in self.native_requests:
                         return error(409, "native rid is already active")
+                    self.finished_requests.pop(rid, None)
                     self.native_requests[rid] = {"group": group, "task": asyncio.current_task()}
                     owned_rid = rid
+                    rewrite = rewrite or data.get("rid") != rid
                     data["rid"] = rid
             started = time.monotonic()
-            if path in PINNED_PATHS or response_control:
+            control = path in PINNED_PATHS or response_control
+            required_bytes = len(raw)
+            if control:
                 backend = next(b for b in self.backends if b.name == pinned)
                 if requires_full_backend and backend.stateless_only:
                     raise ValueError("memory/state requests cannot use a stateless_only backend")
@@ -622,35 +704,39 @@ class Gateway:
                     raise ValueError("selected backend does not support the local remory_encoder_version registry")
                 if not backend.healthy:
                     return error(503, "selected backend is unavailable")
-            else:
-                ticket = self.queue.submit(group=group, model=model, pinned=pinned, units=units,
-                                           requires_local_encoder_versions=requires_local_encoder_versions,
-                                           requires_full_backend=requires_full_backend, tensor_recover=tensor_recover)
-                backend = await asyncio.wait_for(asyncio.shield(ticket.future), self.config["queue_timeout"])
+            while True:
+                if not control:
+                    ticket = self.queue.submit(group=group, model=model, pinned=pinned, units=units,
+                                               requires_local_encoder_versions=requires_local_encoder_versions,
+                                               requires_full_backend=requires_full_backend,
+                                               tensor_recover=tensor_recover, body_bytes=required_bytes)
+                    backend = await asyncio.wait_for(asyncio.shield(ticket.future), self.config["queue_timeout"])
+                body, version_headers = await asyncio.to_thread(
+                    outbound_request, data, raw, rewrite, path, backend, tensor_recover)
+                if backend.max_request_body_bytes is None or len(body) <= backend.max_request_body_bytes:
+                    break
+                if control or pinned:
+                    return error(413, "request body exceeds selected backend max_request_body_bytes",
+                                 "request_body_too_large")
+                # Nothing has been sent. JSON rewrites can expand compact or
+                # Unicode bodies; re-admit by actual size, retaining all memory
+                # constraints. This is routing before dispatch, never a POST retry.
+                self.queue.release(ticket)
+                ticket = None
+                required_bytes = max(required_bytes, len(body))
             waited = time.monotonic() - started
-            # OpenAI public aliases map to the backend's own served model name.
-            if path.startswith("/v1/") and "model" in data:
-                data["model"] = backend.native_model
             if owned_rid:
                 native_ids = [owned_rid]
             headers = {"Content-Type": "application/json", "Accept-Encoding": "identity",
                        **self.upstream_headers(backend, group)}
-            outbound = data
-            version_headers = {}
-            if backend.stateless_only and tensor_recover:
-                sampling = data["sampling_params"]
-                custom = sampling["custom_params"]
-                if "remory_encoder_version" in custom:
-                    # Preserve the original request/provenance. Strip only on
-                    # the verified remote recover dispatch, never local encode
-                    # or local recovery, and never ordinary versioned requests.
-                    outbound = {**data, "sampling_params": {**sampling, "custom_params": {
-                        k: v for k, v in custom.items() if k != "remory_encoder_version"}}}
-                    version_headers["X-Remory-Encoder-Version-Handling"] = "ignored-for-tensor-recover"
+            dispatched_backend = backend
+            backend.routed_requests += 1
+            backend.last_request_group = group
+            backend.last_request_kind = "tensor_recover" if tensor_recover else "memory" if requires_full_backend else "generation"
             # Preserve SSE bytes, status and content type. No retry/failover
             # occurs after dispatch, including before the first response byte.
             async with asyncio.timeout(self.config["request_timeout"]), self.session.request(request.method, backend.url + path,
-                    params=request.query, data=json.dumps(outbound).encode(), headers=headers,
+                    params=request.query, data=body, headers=headers,
                     allow_redirects=False) as upstream:
                 response = web.StreamResponse(status=upstream.status, headers={
                     "Content-Type": upstream.headers.get("Content-Type", "application/json"),
@@ -664,7 +750,10 @@ class Gateway:
                     await response.write(chunk)
                 await response.write_eof()
                 self.completed += 1
-                native_ids = []
+                drained = upstream.status < 400
+                dispatch_success = drained
+                if drained:
+                    native_ids = []
                 return response
         except web.HTTPRequestEntityTooLarge:
             self.failed += 1
@@ -689,6 +778,11 @@ class Gateway:
                 raise
             return error(502, "upstream transport failed; generation was not retried", "upstream_error")
         finally:
+            if dispatched_backend is not None:
+                if dispatch_success:
+                    dispatched_backend.successful_requests += 1
+                else:
+                    dispatched_backend.failed_requests += 1
             if native_ids and ticket is not None and ticket.backend is not None:
                 # Keep ownership until abort is sent, or its short deadline
                 # expires. Do not block the event loop or abort another caller.
@@ -698,6 +792,7 @@ class Gateway:
                             headers=self.upstream_headers(ticket.backend, group),
                             timeout=ClientTimeout(total=3), allow_redirects=False) as aborted:
                         await aborted.read()
+                        return 200 <= aborted.status < 300
                 # Nested gateways can receive both a disconnect and an explicit
                 # abort. A second cancellation must not interrupt cleanup that
                 # the first cancellation already started.
@@ -710,11 +805,15 @@ class Gateway:
                     except (ClientError, TimeoutError, OSError, ValueError):
                         break
                 with contextlib.suppress(ClientError, TimeoutError, asyncio.CancelledError, OSError, ValueError):
-                    cleanup.result()
+                    drained = cleanup.result()
             if ticket is not None:
                 self.queue.release(ticket)
             if owned_rid:
                 self.native_requests.pop(owned_rid, None)
+                if drained or ticket is None or ticket.backend is None:
+                    self.finished_requests[owned_rid] = (group, time.monotonic())
+                    while len(self.finished_requests) > 4096:
+                        self.finished_requests.pop(next(iter(self.finished_requests)))
             self.uploading -= 1
 
 

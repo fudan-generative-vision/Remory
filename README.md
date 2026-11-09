@@ -14,6 +14,11 @@ it, helping the frozen model continue its work across compactions.
 
 ## News
 
+- **2026-11-09** — **Shared inference with server-owned memory:** local block
+  batching, TP-parallel residual encoding, and a mixed local/H20 pool. Remote
+  soft tokens stay on the inference host; compact and resume exchange references.
+  [Setup, measurements and limits](serving/server-memory/docs/inference-pool.md).
+
 - **2026-10-31** — **29.3328 on ASI-Bench with just Qwen3.8-27B + REMORY-1.9B!**
   Our small open model surpasses the [published scores](https://asibench.apexin.ai/leaderboard/)
   of trillion-parameter models **Kimi-K2.7 (27.34), DeepSeek-V4-Pro (24.98),
@@ -52,7 +57,7 @@ through one endpoint. See [deployment](docs/deployment.md) for more options.
 ### 1. Install
 
 ```bash
-git clone https://github.com/1ring2rta/Remory.git
+git clone https://github.com/fudan-generative-vision/Remory.git
 cd Remory
 python deploy/install.py
 source .remory/venv/bin/activate

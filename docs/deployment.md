@@ -194,3 +194,11 @@ remory serve --backend transformers --device cuda:0 --store remory.sqlite
 
 Both Qwen backends use the same compaction engine and verify checkpoint checksums.
 See [development](development.md) for the SGLang hooks and backend interface.
+
+### Reference-only remote memory
+
+The advanced [mixed inference pool](../serving/server-memory/docs/inference-pool.md)
+adds server-owned soft memory, pinned remote sessions, durable snapshots, local
+block batching and TP-parallel encoding. It includes a five-backend example and
+measured performance limits. The root quick start keeps its existing API and
+checkpoint transport.
