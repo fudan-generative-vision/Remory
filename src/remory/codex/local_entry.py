@@ -159,7 +159,8 @@ def main(argv=None):
                        and not os.environ.get('REMORY_URL'))
         if use_default:
             args = ['--url', config['default_url'], *args]
-        for flag, key in (('--codex', 'codex'), ('--model-path', 'model_path')):
+        for flag, key in (('--codex', 'codex'), ('--model-path', 'model_path'),
+                          ('--mcp-config', 'mcp_config')):
             if key == 'model_path' and not use_default:
                 continue  # A different server may use another tokenizer/model family.
             if config.get(key) and flag not in args and not any(x.startswith(flag + '=') for x in args):

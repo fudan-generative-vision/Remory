@@ -1,0 +1,2 @@
+# Keep webpage collection separate from the SGLang serving environment.
+scrapling[ai]==0.5.1

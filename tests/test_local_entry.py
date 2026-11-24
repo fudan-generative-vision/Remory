@@ -74,6 +74,23 @@ def test_unified_list_preserves_runtime_namespaces(setup, monkeypatch):
     assert names == {'remory:collision', 'legacy:collision'}
 
 
+def test_default_mcp_is_new_session_only_and_respects_explicit_config(setup, monkeypatch):
+    config, root, invoked = setup
+    config['mcp_config'] = '/tools/scrapling.toml'
+    from pathlib import Path
+    import os
+    Path(os.environ['REMORY_LAUNCHER_CONFIG']).write_text(json.dumps(config))
+    local_entry.main(['-C', '/work'])
+    args = invoked[-1][1]
+    assert args[args.index('--mcp-config') + 1] == '/tools/scrapling.toml'
+    for override in (['--mcp-config', '/custom.toml'], ['--mcp-config=/custom.toml']):
+        local_entry.main(override)
+        assert '/tools/scrapling.toml' not in invoked[-1][1]
+    saved_session(root, 'new-only')
+    local_entry.main(['resume', 'new-only'])
+    assert invoked[-1] == ('remory', ['resume', 'new-only'])
+
+
 def test_credentials_are_literal_whitelisted_and_do_not_override_environment(tmp_path, monkeypatch):
     path = tmp_path / 'keys'
     path.write_text('SERPER_API_KEY="$(do-not-execute)"\nMINERU_API_KEY=from-file\nPYTHONPATH=/bad\n')

@@ -1,0 +1,21 @@
+# Install requirements-scraping.txt and put that environment's bin/ on PATH,
+# or replace command with the absolute path to its scrapling executable.
+[mcp_servers.scrapling]
+command = "scrapling"
+args = ["mcp"]
+enabled_tools = ["make_request", "browser_fetch_once"]
+startup_timeout_sec = 30
+tool_timeout_sec = 180
+required = true
+
+# Direct networking by default, including redirects. No API key is needed.
+[mcp_servers.scrapling.env]
+CUDA_VISIBLE_DEVICES = ""
+HTTP_PROXY = ""
+HTTPS_PROXY = ""
+ALL_PROXY = ""
+http_proxy = ""
+https_proxy = ""
+all_proxy = ""
+NO_PROXY = "*"
+no_proxy = "*"
