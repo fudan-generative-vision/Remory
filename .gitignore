@@ -14,4 +14,5 @@ build/
 *.pt
 .env
 node_modules/
-.remory/
+.r-codex-text/
+.venv-*/

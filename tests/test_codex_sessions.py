@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from remory.codex import cli, sessions
+from r_codex import cli, sessions
 
 
 def saved_session(root, name='saved', *, text='检查这个项目', provider_thread=False,

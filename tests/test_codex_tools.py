@@ -9,7 +9,7 @@ import urllib.error
 
 import pytest
 
-from remory.codex import cli, search, tools
+from r_codex import cli, search, tools
 
 
 def test_research_profile_passes_keys_only_through_environment(tmp_path, monkeypatch):
@@ -27,7 +27,7 @@ def test_research_profile_passes_keys_only_through_environment(tmp_path, monkeyp
 
 
 def test_missing_tools_and_conflicting_keys_are_actionable_and_redacted(monkeypatch, capsys):
-    for name in ('SERPER_API_KEY', 'MINERU_API_KEY', 'MINERU_API_TOKEN', 'REMORY_TOOLS_VENV'):
+    for name in ('SERPER_API_KEY', 'MINERU_API_KEY', 'MINERU_API_TOKEN', 'R_CODEX_TOOLS_VENV'):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(tools, 'executable', lambda *args: None)
     with pytest.raises(ValueError, match='SERPER_API_KEY.*Docling.*MINERU_API_KEY'):
@@ -83,12 +83,12 @@ def test_serper_stdio_handshake_and_validation():
         {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/call', 'params': {
             'name': 'search', 'arguments': {'query': 'test', 'num_results': 100}}},
         {'jsonrpc': '2.0', 'id': 5, 'method': 'tools/call', 'params': None}]
-    result = subprocess.run([sys.executable, '-m', 'remory.codex.search'], env=env,
+    result = subprocess.run([sys.executable, '-m', 'r_codex.search'], env=env,
         input='\n'.join(map(json.dumps, messages)) + '\n', capture_output=True, text=True,
         timeout=20, check=True)
     rows = [json.loads(line) for line in result.stdout.splitlines()]
     assert [row['id'] for row in rows] == [1, 2, 3, 4, 5]
-    assert rows[0]['result']['serverInfo']['name'] == 'remory-serper'
+    assert rows[0]['result']['serverInfo']['name'] == 'r-codex-serper'
     assert rows[1]['result']['tools'][0]['name'] == 'search'
     assert 'SERPER_API_KEY' in rows[2]['result']['content'][0]['text']
     assert rows[3]['result']['content'][0]['text'] == 'Invalid search arguments'

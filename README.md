@@ -1,204 +1,66 @@
-<h1 align="center">REMORY</h1>
+# r-codex · text compact
 
-<p align="center"><strong>Learning Residual Memory for Context Compaction</strong></p>
+A standalone branch of [REMORY's r-codex](https://github.com/fudan-generative-vision/Remory), based on official `main` at `8ee4b0ecf1f3765c5d32d2bc2d97cbef87789915`.
 
-<p align="center">
-  <a href="https://arxiv.org/abs/2610.11287"><img src="https://img.shields.io/badge/arXiv-2610.11287-bb9af7?style=flat-square&amp;logo=arxiv&amp;logoColor=white&amp;labelColor=1a1b26" alt="Paper on arXiv"></a>
-  <a href="https://github.com/fudan-generative-vision/Remory"><img src="https://img.shields.io/badge/GitHub-Code-7aa2f7?style=flat-square&amp;logo=github&amp;logoColor=white&amp;labelColor=1a1b26" alt="Code on GitHub"></a>
-  <a href="#models"><img src="https://img.shields.io/badge/Hugging_Face-Models-e0af68?style=flat-square&amp;logo=huggingface&amp;logoColor=white&amp;labelColor=1a1b26" alt="Models on Hugging Face"></a>
-</p>
+The native Codex terminal handles editing, shell tools, approvals, `/goal`, subagents and conversation history. A small local bridge connects it to an **OpenAI-compatible Chat Completions endpoint**. Both `/compact` and automatic compaction create a **text handoff summary using the selected model**.
 
-**Remory** supplements an agent's compaction summary with learned soft memory
-from its history. The memory is conditioned on the summary and appended after
-it, helping the frozen model continue its work across compactions.
+This branch contains no REMORY compressor, residual tokens, memory-server client, online trainer or model weights. It does not require PyTorch, Transformers, a local tokenizer or an OpenAI login. The model server is deployed separately.
 
-## News
+## Install and start
 
-- **2026-11-09** — **Shared inference with server-owned memory:** local block
-  batching, TP-parallel residual encoding, and a mixed local/H20 pool. Remote
-  soft tokens stay on the inference host; compact and resume exchange references.
-  [Setup, measurements and limits](serving/server-memory/docs/inference-pool.md).
-
-- **2026-10-31** — **29.3328 on ASI-Bench with just Qwen3.8-27B + REMORY-1.9B!**
-  Our small open model surpasses the [published scores](https://asibench.apexin.ai/leaderboard/)
-  of trillion-parameter models **Kimi-K2.7 (27.34), DeepSeek-V4-Pro (24.98),
-  and MiMo-V2.5-Pro (23.25)**.
-  [Scored result](assets/asi-bench-result.pdf) · [Comparison sources](assets/README.md#asi-bench-result).
-
-- **2026-10-18** — **Online training in r-codex:** `/remory train` learns from
-  ongoing Qwen sessions; `/remory load` opens the memory-checkpoint picker.
-  Use `/remory status` to follow progress and `/remory stop` to save and stop.
-  Qwen stays frozen; selected memory weights apply at the next successful
-  compaction. [Setup and commands](integrations/codex/online-training.md).
-
-https://github.com/user-attachments/assets/b83e4d92-2b32-4f7c-9a8e-cb7e44078955
-
-<sub>Music: <a href="https://www.scottbuckley.com.au/library/electric-dreams/">Electric Dreams</a> by Scott Buckley · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="NOTICES.md#video-credits">Credits</a></sub>
-
-![Remory: summary-conditioned residual memory alongside standard Codex compaction, with training curves from the paper.](assets/remory.png)
-
-## Models
-
-| Base model | Memory checkpoint | Deployment |
-| --- | --- | --- |
-| Qwen3.8-27B | [Qwen3.8-27B-REMORY-1.9B](https://huggingface.co/mocoV3/Qwen3.8-27B-REMORY-1.9B) | [SGLang](docs/deployment.md#launch), [Transformers](docs/deployment.md#transformers) |
-| GLM-5.3-Flash | [GLM-5.3-Flash-REMORY-1.24B](https://huggingface.co/mocoV3/GLM-5.3-Flash-REMORY-1.24B) | [SGLang](docs/deployment.md#glm-53-flash) |
-
-The GLM release is the 1.24B checkpoint used in local evaluations, distinct from
-the 1.502B encoder described in the paper. Both models use the same pinned SGLang
-version and launcher. The quick start below uses Qwen.
-
-## Quick Start
-
-Plan for **at least 2 × 80 GB GPUs** to deploy **Qwen3.8-27B + Remory** with
-SGLang. The command below loads both models and serves generation and compaction
-through one endpoint. See [deployment](docs/deployment.md) for more options.
-
-### 1. Install
+Python 3.11+ is required. Use a dedicated environment so an existing REMORY installation remains available:
 
 ```bash
-git clone https://github.com/fudan-generative-vision/Remory.git
-cd Remory
-python deploy/install.py
-source .remory/venv/bin/activate
+git clone --branch codex/text-compact --single-branch \
+  https://github.com/fudan-generative-vision/Remory.git r-codex-text
+cd r-codex-text
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+
+r-codex-text --url http://127.0.0.1:8000/v1 --model YOUR_MODEL \
+  --context-window 131072 -C /path/to/project
 ```
 
-The installer prepares a local environment with the pinned SGLang version,
-Remory hook, and CUDA compiler components.
+`r-codex` and `r-codex-text` are aliases in this environment. The first launch downloads the checksum-verified upstream Codex **0.149.0** binary on Linux x86_64/aarch64. Supply `--codex /path/to/codex` to reuse that version. No model/tokenizer download is performed.
 
-### 2. Launch SGLang with Remory
+For an authenticated server, put the key in `R_CODEX_API_KEY`, or use `--api-key-env YOUR_KEY_VARIABLE`. The launcher saves the variable name, never its value. `R_CODEX_URL` and `R_CODEX_MODEL` provide defaults. Configure `--context-window` to the capacity actually supported by your backend; otherwise the launcher attempts `/models` discovery and falls back to 131072. `--max-output-tokens` sets the generation ceiling. `--reasoning-effort` passes an optional reasoning level to the backend, which must support that field.
+
+## Text compaction
+
+Enter `/compact` in the native terminal to summarize the current conversation. Native automatic compaction uses the same path at the configured context threshold. The summary retains progress, decisions, constraints, outstanding work and essential references. The next model request contains that text and the subsequent conversation.
+
+The bridge stores a versioned, self-contained text checkpoint in the native Responses `compaction` item. The protocol field is named `encrypted_content` by upstream; **its content here is base64-encoded plaintext JSON, not encrypted data**. Transcripts and checkpoints should be treated as ordinary conversation files. Compaction errors leave the native history available for retry. Summaries can omit details; the original native transcript remains on disk.
+
+Native subagents use independent conversation state and the selected backend. They can start from a task or fork the parent's context, including text checkpoints. Results return through native subagent tools. There is no residual-memory aggregation or separate compaction agent. `/agentic_compact` and `/remory` are not commands in this branch.
+
+## Resume and coexistence
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 python -m remory.launch_server \
-  --model-path Qwen/Qwen3.8-27B \
-  --remory-checkpoint mocoV3/Qwen3.8-27B-REMORY-1.9B \
-  --tp 2 \
-  --host 127.0.0.1 \
-  --port 8421
+source .venv/bin/activate
+r-codex resume
+r-codex resume --last
+r-codex resume SESSION
+r-codex list
 ```
 
-`--tp 2` splits the LLM across the two GPUs; each worker also loads Remory.
-The context window defaults to the model maximum (256K for Qwen3.8-27B).
-The first run downloads weights and compiles GPU kernels.
+State defaults to `~/.local/share/r-codex-text`; override it with `R_CODEX_HOME`. Each session has its own Codex home, transcript, provider records and saved endpoint/model settings. API keys must be present again when resuming. Resume keeps the saved model and normalized backend URL; start a new session to change them. Context/output limits and reasoning settings can be overridden. Native thread UUIDs also resolve to their saved sessions. A session already running in tmux attaches to its existing pane.
 
-For an existing clone, follow the [upgrade instructions](docs/deployment.md#upgrade).
-The launcher downloads the pinned checkpoint automatically.
+Existing REMORY sessions stay in their original store. Residual-memory checkpoints cannot be resumed here: start a new text session and provide an exported text handoff if needed. Installing this branch does not migrate sessions or reconfigure running inference services.
 
-### 3. Open Codex
+## Optional tools
 
-In another terminal:
+Native shell and file editing retain Codex's approval and sandbox controls. For a vision-capable backend, pass `--image-input` to enable native image inputs and `view_image`; text-only is the default. `--unsafe` explicitly disables those controls. Use `--mcp-config /path/to/tools.toml` for native MCP servers. Optional Serper, Docling, MinerU and Scrapling setup is documented in [integrations/codex/README.md](integrations/codex/README.md).
+
+## Development
 
 ```bash
-source .remory/venv/bin/activate
-r-codex -C /path/to/project
+python -m pip install -e '.[test]'
+pytest -q
+ruff check src tests
+
+# Exercise a real native app-server against a deterministic local mock model.
+R_CODEX_TEST_BINARY=/path/to/codex-0.149.0 pytest -q tests/test_native_text_smoke.py
 ```
 
-This opens the native Codex UI with Remory compaction. Use `/compact` during a
-session and `r-codex resume --last` to return later. Codex is installed on first
-use. See [Codex](integrations/codex) for sessions, sub-agents, and MCP tools.
-
-For web search and document tools, enable
-`--research-tools`. This requires **`SERPER_API_KEY`** and **`MINERU_API_KEY`**
-(`MINERU_API_TOKEN` is also accepted), plus the separate Docling/MinerU tool
-environment. Run `r-codex tools` to check your setup. See
-[research tools and API keys](integrations/codex/README.md#research-tools-and-api-keys)
-for installation and configuration; local chat and shell/file tools need no
-external API key.
-
-### Generate and compact through the API
-
-```bash
-curl http://127.0.0.1:8421/generate \
-  -H 'Content-Type: application/json' \
-  -d '{"text":"The capital of France is", "sampling_params":{"temperature":0,"max_new_tokens":16}}'
-```
-
-In another terminal, run the full compaction example from the repository root:
-
-```bash
-source .remory/venv/bin/activate
-python examples/quickstart.py
-```
-
-The example generates an answer, creates a summary and residual memory, then
-continues from that checkpoint. All model calls use the same SGLang `/generate`
-endpoint. During residual encoding, the Remory hook reads the actor's hidden
-states and runs the memory network. During continuation, it inserts the saved
-soft tokens after the summary.
-
-## Replace compact
-
-[`Harness.compact`](src/remory/adapters/harness.py) is the compaction method to
-connect to your agent: generate a summary, encode residual memory, then return
-the new checkpoint. The agent retains its own tools and compaction trigger.
-
-```python
-from remory.adapters import Harness
-from remory.client import Client
-
-with Client("http://127.0.0.1:8421", session_id="my-session") as client:
-    agent = Harness(client, codec)  # The actor's native chat template
-    checkpoint = agent.compact(
-        prefix_messages=prefix,    # System prompt, tools, and original task
-        removed_messages=history,
-        summary_prompt=summary_prompt,
-        summary_schema=summary_schema,
-    )
-    result = agent.generate(
-        checkpoint=checkpoint, prefix_messages=prefix, messages=new_messages,
-    )
-```
-
-The [complete example](examples/quickstart.py) loads the tokenizer and summary
-prompt from the released checkpoint. If your harness already generates a
-summary, use `on_compact(..., summary=summary)` to add residual memory.
-
-Save the checkpoint with the conversation. For the next compaction, pass it as
-`previous` and supply the newly removed history. Memory is stored in
-`.remory/memory.sqlite`. The [Codex integration](integrations/codex) provides a
-complete Responses provider and an interactive launcher.
-See the [API reference](docs/api.md) for native SGLang requests with memory.
-
-## Training
-
-The [Qwen3.8-27B training guide](training) includes the Stage I reconstruction
-trainer, Stage II summary-conditioned residual-memory trainer, four-GPU launch
-commands, and checkpoint/resume instructions. Both stages freeze Qwen and train
-only the memory network. [Synthetic JSONL examples](training/examples) show the
-document and history/summary/continuation formats, with CPU preparation commands.
-
-## Results
-
-![BrowseComp and Terminal-Bench 2.1 scores for Qwen3.8-27B and GLM-5.3-Flash, with and without residual memory.](assets/benchmarks.png)
-
-Qwen3.8-27B and GLM-5.3-Flash improve across long-horizon agent benchmarks.
-Residual memory also reduces repeated tool outputs and tool errors on BrowseComp
-and Terminal-Bench 2.1. On SummHay, it approaches the full-context joint score
-using 5.2% of the input positions.
-
-Gray bars show published frontier results under their respective evaluation
-protocols. Full results and settings are in the [paper](https://arxiv.org/pdf/2610.11287).
-
-## Acknowledgements
-
-The Qwen memory network builds on [DFlash](https://github.com/z-lab/dflash)
-and [SpecForge](https://github.com/sgl-project/SpecForge).
-Inference uses [SGLang](https://github.com/sgl-project/sglang)
-and [Transformers](https://github.com/huggingface/transformers).
-
-## Citation
-
-```bibtex
-@misc{xia2026remory,
-  title  = {Remory: Learning Residual Memory for Context Compaction},
-  author = {Xia, Hanchen and Chen, Baoyou and Ge, Yutang and Deng, Naihao and
-            Yang, Senqiao and Dong, Zilong and Yuan, Weihao and Zhu, Siyu},
-  year   = {2026},
-  eprint = {2610.11287},
-  archivePrefix = {arXiv},
-  primaryClass = {cs.CL},
-  url    = {https://arxiv.org/abs/2610.11287}
-}
-```
-
-[Development](docs/development.md) · [Online-250 serving pool](serving/server-memory/docs/h20-public-deployment.md) · [MIT License](LICENSE) · [Third-party notices](NOTICES.md)
+No real-model result is implied by the mock integration tests. Endpoint tool-calling quality, image support and available reasoning levels depend on the selected backend. Generation is buffered per backend completion before native response events are relayed, so long model calls may appear quiet in the terminal. See [NOTICES.md](NOTICES.md) for provenance and licenses.
